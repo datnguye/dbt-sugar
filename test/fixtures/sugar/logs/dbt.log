@@ -1,0 +1,256 @@
+==================== 2026-11-15T12:36:56.834274Z | 01a1df35-f168-7d20-8bf5-635557836a76 ====================
+12:36:56.837679 [info ]: dbt 2.0.11
+12:36:56.840158 [info ]: Started loading project
+12:36:56.856677 [info ]: Loading profiles.yml
+12:36:57.006849 [info ]: Finished loading project [  0.17s]
+12:36:57.010154 [info ]: Started parsing (4 nodes)
+12:36:57.128635 [info ]: Finished parsing [  0.12s] (4 nodes, 0 skipped, 0 errors)
+12:36:57.164774 [info ]: Started scheduling
+12:36:57.167146 [info ]: Finished scheduling [  0.00s]
+12:36:57.187528 [info ]: Started building task graph
+12:36:57.191443 [info ]: Finished building task graph [  0.00s]
+/* {"app": "dbt", "connection_name": "", "dbt_version": "2.0.0", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+    select schema_name
+    from system.information_schema.schemata
+    
+    where lower(catalog_name) = '"fx2"'
+    
+  
+  
+/* {"app": "dbt", "connection_name": "", "dbt_version": "2.0.0", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+        select type from duckdb_databases()
+        where lower(database_name)='fx2'
+        and type='sqlite'
+    
+  
+/* {"app": "dbt", "connection_name": "", "dbt_version": "2.0.0", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+    
+        create schema if not exists "fx2"."main"
+    
+12:36:57.347800 [info ]: Started rendering (8 nodes)
+12:36:57.348093 [info ]: Started seed main.raw_orders
+12:36:57.350641 [info ]: Started running (8 nodes)
+12:36:57.350647 [info ]: Started running seed main.raw_orders
+SELECT table_catalog, table_schema, table_name, table_type FROM information_schema.tables WHERE table_schema = 'main' AND lower(table_catalog) = lower('fx2')
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "seed.sugar_fixture.raw_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    create table "fx2"."main"."raw_orders" ("id" bigint,"amount" bigint)
+  
+
+          COPY "fx2"."main"."raw_orders" FROM '/home/dev/sugar_fixture/seeds/raw_orders.csv' (FORMAT CSV, HEADER TRUE, DELIMITER ',')
+        
+12:36:57.388662 [info ]: Finished running [  0.04s] seed main.raw_orders [success]
+12:36:57.388953 [info ]:  Succeeded seed  main.raw_orders (table) [1 of 8 in 0.04s]
+12:36:57.388996 [info ]: Started model main.stg_orders
+12:36:57.392017 [info ]: Started analyzing (7 nodes)
+12:36:57.405802 [info ]: Started running model main.stg_orders
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.stg_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+  
+    
+    
+    create  table
+      "fx2"."main"."stg_orders__dbt_tmp"
+  
+    as (
+      select id, amount from "fx2"."main"."raw_orders"
+    );
+  
+    
+  
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.stg_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+alter table "fx2"."main"."stg_orders__dbt_tmp" rename to "stg_orders"
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.stg_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+      drop table if exists "fx2"."main"."stg_orders__dbt_backup" cascade
+    
+12:36:57.415337 [info ]: Finished running [  0.01s] model main.stg_orders [success]
+12:36:57.415347 [info ]:  Succeeded model main.stg_orders (table) [2 of 8 in 0.02s]
+12:36:57.415369 [info ]: Started test main_dbt_test__audit.unique_stg_orders_id
+12:36:57.415388 [info ]: Started test main_dbt_test__audit.not_null_stg_orders_id
+12:36:57.415405 [info ]: Started model main.fct_orders
+12:36:57.417353 [info ]: Started running test main_dbt_test__audit.not_null_stg_orders_id
+12:36:57.418284 [info ]: Started running test main_dbt_test__audit.unique_stg_orders_id
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "test.sugar_fixture.not_null_stg_orders_id.8cf5724805", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  
+    
+    
+
+
+
+select id
+from "fx2"."main"."stg_orders"
+where id is null
+
+
+
+  
+  
+      
+    ) dbt_internal_test
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "test.sugar_fixture.unique_stg_orders_id.beb6e97f2f", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  
+    
+    
+
+select
+    id as unique_field,
+    count(*) as n_records
+
+from "fx2"."main"."stg_orders"
+where id is not null
+group by id
+having count(*) > 1
+
+
+
+  
+  
+      
+    ) dbt_internal_test
+12:36:57.421284 [info ]: Finished running [  0.00s] test main_dbt_test__audit.not_null_stg_orders_id [pass]
+12:36:57.421296 [info ]:     Passed test  not_null_stg_orders_id [4 of 8 in 0.00s]
+12:36:57.421326 [info ]: Finished running [  0.00s] test main_dbt_test__audit.unique_stg_orders_id [pass]
+12:36:57.421334 [info ]:     Passed test  unique_stg_orders_id [3 of 8 in 0.01s]
+12:36:57.421350 [info ]: Started running model main.fct_orders
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.fct_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+  
+    
+    
+    create  table
+      "fx2"."main"."fct_orders__dbt_tmp"
+  
+    as (
+      select id, amount * 2 as doubled from "fx2"."main"."stg_orders"
+    );
+  
+    
+  
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.fct_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+alter table "fx2"."main"."fct_orders__dbt_tmp" rename to "fct_orders"
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.fct_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+      drop table if exists "fx2"."main"."fct_orders__dbt_backup" cascade
+    
+12:36:57.424486 [info ]: Finished running [  0.00s] model main.fct_orders [success]
+12:36:57.424496 [info ]:  Succeeded model main.fct_orders (table) [5 of 8 in 0.00s]
+12:36:57.424515 [info ]: Started test main_dbt_test__audit.unique_fct_orders_id
+12:36:57.424534 [info ]: Started model main.agg_orders
+12:36:57.425211 [info ]: Started running test main_dbt_test__audit.unique_fct_orders_id
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "test.sugar_fixture.unique_fct_orders_id.2a20231a0b", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  
+    
+    
+
+select
+    id as unique_field,
+    count(*) as n_records
+
+from "fx2"."main"."fct_orders"
+where id is not null
+group by id
+having count(*) > 1
+
+
+
+  
+  
+      
+    ) dbt_internal_test
+12:36:57.426406 [info ]: Finished running [  0.00s] test main_dbt_test__audit.unique_fct_orders_id [pass]
+12:36:57.426414 [info ]:     Passed test  unique_fct_orders_id [6 of 8 in 0.00s]
+12:36:57.426427 [info ]: Started running model main.agg_orders
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.agg_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+  
+    
+    
+    create  table
+      "fx2"."main"."agg_orders__dbt_tmp"
+  
+    as (
+      select count(*) as orders, sum(doubled) as total from "fx2"."main"."fct_orders"
+    );
+  
+    
+  
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.agg_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+alter table "fx2"."main"."agg_orders__dbt_tmp" rename to "agg_orders"
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "model.sugar_fixture.agg_orders", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+      drop table if exists "fx2"."main"."agg_orders__dbt_backup" cascade
+    
+12:36:57.429675 [info ]: Finished running [  0.00s] model main.agg_orders [success]
+12:36:57.429683 [info ]:  Succeeded model main.agg_orders (table) [7 of 8 in 0.00s]
+12:36:57.429698 [info ]: Started test main_dbt_test__audit.not_null_agg_orders_total
+12:36:57.430128 [info ]: Finished rendering [  0.08s] (8 nodes, 0 skipped, 0 errors)
+12:36:57.430181 [info ]: Finished analyzing [  0.04s] (7 nodes, 0 skipped, 0 errors)
+12:36:57.430188 [info ]: Started running test main_dbt_test__audit.not_null_agg_orders_total
+/* {"app": "dbt", "dbt_version": "2.0.0", "node_id": "test.sugar_fixture.not_null_agg_orders_total.f31e037c67", "profile_name": "sugar_fixture", "target_name": "dev"} */
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  
+    
+    
+
+
+
+select total
+from "fx2"."main"."agg_orders"
+where total is null
+
+
+
+  
+  
+      
+    ) dbt_internal_test
+12:36:57.431219 [info ]: Finished running [  0.00s] test main_dbt_test__audit.not_null_agg_orders_total [pass]
+12:36:57.431225 [info ]: Finished running [  0.08s] (8 nodes, 0 skipped, 0 errors)
+12:36:57.431229 [info ]:     Passed test  not_null_agg_orders_total [8 of 8 in 0.00s]
+12:37:00.584128 [info ]: 
+==================== Execution Summary =====================
+Finished 'build' successfully for target 'dev' [3.7s]
+Processed: 3 models | 4 tests | 1 seed
+Summary: 8 total | 8 success

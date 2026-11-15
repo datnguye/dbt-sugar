@@ -1,0 +1,62 @@
+{
+  "name": "dbt-sugar",
+  "version": "0.0.0",
+  "description": "A live local page for dbt v2 runs: what's running, what's next, what to fix, a diff for reviewers, and Dinor Sugar chasing the dbt logo.",
+  "keywords": [
+    "dbt",
+    "dbt-fusion",
+    "dbt-v2",
+    "opentelemetry",
+    "monitoring",
+    "dashboard",
+    "cli"
+  ],
+  "homepage": "https://github.com/datnguye/dbt-sugar#readme",
+  "bugs": {
+    "url": "https://github.com/datnguye/dbt-sugar/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/datnguye/dbt-sugar.git"
+  },
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./mascot": "./src/web/lib/mascot.js",
+    "./view": "./src/web/lib/view.js",
+    "./style.css": "./src/web/style.css",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "sugar": "src/bin/sugar.js"
+  },
+  "files": [
+    "src",
+    "!src/scripts",
+    "LICENSE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/bin/sugar.js",
+    "playground": "node test/playground/run.js",
+    "check": "node src/scripts/check.mjs",
+    "test": "node --test --experimental-test-coverage --test-coverage-include='src/**' --test-coverage-exclude='src/bin/**' --test-coverage-exclude='src/scripts/**' --test-coverage-exclude='src/web/app.js' --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 'test/unit/**/*.test.js' 'test/e2e/*.test.js'",
+    "test:unit": "node --test 'test/unit/**/*.test.js'",
+    "test:ui": "playwright test",
+    "verify": "npm run check && npm test && npm run test:ui",
+    "demo:gif": "node src/scripts/demo-gif.mjs",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true",
+    "ux:shots": "node src/scripts/ux-shots.mjs",
+    "spec-guard": "node src/scripts/spec-guard.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1"
+  },
+  "dependencies": {
+    "@duckdb/node-api": "2.0.0-r.1"
+  }
+}

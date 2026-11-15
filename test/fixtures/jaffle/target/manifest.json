@@ -1,0 +1,2142 @@
+{
+ "metadata": {
+  "dbt_version": "2.0.11",
+  "project_name": "jaffle_shop",
+  "invocation_id": "01a1ded5-9896-7e40-9273-211b114169e6",
+  "generated_at": "2026-11-15T10:51:44.705337Z"
+ },
+ "nodes": {
+  "model.jaffle_shop.customers": {
+   "unique_id": "model.jaffle_shop.customers",
+   "resource_type": "model",
+   "name": "customers",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/customers.sql",
+   "description": "Customer overview data mart, offering key details for each unique customer. One row per customer.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_customers",
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "99eff7e87bcb1209d406ed442a2b5b957020fc99b0fb7ff7230be09193a7d4c6"
+   },
+   "raw_code": "with\n\ncustomers as (\n\n    select * from {{ ref('stg_customers') }}\n\n),\n\norders as (\n\n    select * from {{ ref('orders') }}\n\n),\n\ncustomer_orders_summary as (\n\n    select\n        orders.customer_id,\n\n        count(distinct orders.order_id) as count_lifetime_orders,\n        count(distinct orders.order_id) > 1 as is_repeat_buyer,\n        min(orders.ordered_at) as first_ordered_at,\n        max(orders.ordered_at) as last_ordered_at,\n        sum(orders.subtotal) as lifetime_spend_pretax,\n        sum(orders.tax_paid) as lifetime_tax_paid,\n        sum(orders.order_total) as lifetime_spend\n\n    from orders\n\n    group by 1\n\n),\n\njoined as (\n\n    select\n        customers.*,\n\n        customer_orders_summary.count_lifetime_orders,\n        customer_orders_summary.first_ordered_at,\n        customer_orders_summary.last_ordered_at,\n        customer_orders_summary.lifetime_spend_pretax,\n        customer_orders_summary.lifetime_tax_paid,\n        customer_orders_summary.lifetime_spend,\n\n        case\n            when customer_orders_summary.is_repeat_buyer then 'returning'\n            else 'new'\n        end as customer_type\n\n    from customers\n\n    left join customer_orders_summary\n        on customers.customer_id = customer_orders_summary.customer_id\n\n)\n\nselect * from joined",
+   "columns": {
+    "customer_id": {
+     "name": "customer_id",
+     "data_type": null,
+     "description": "The unique key of the orders mart."
+    },
+    "customer_name": {
+     "name": "customer_name",
+     "data_type": null,
+     "description": "Customers' full name."
+    },
+    "count_lifetime_orders": {
+     "name": "count_lifetime_orders",
+     "data_type": null,
+     "description": "Total number of orders a customer has ever placed."
+    },
+    "first_ordered_at": {
+     "name": "first_ordered_at",
+     "data_type": null,
+     "description": "The timestamp when a customer placed their first order."
+    },
+    "last_ordered_at": {
+     "name": "last_ordered_at",
+     "data_type": null,
+     "description": "The timestamp of a customer's most recent order."
+    },
+    "lifetime_spend_pretax": {
+     "name": "lifetime_spend_pretax",
+     "data_type": null,
+     "description": "The sum of all the pre-tax subtotals of every order a customer has placed."
+    },
+    "lifetime_tax_paid": {
+     "name": "lifetime_tax_paid",
+     "data_type": null,
+     "description": "The sum of all the tax portion of every order a customer has placed."
+    },
+    "lifetime_spend": {
+     "name": "lifetime_spend",
+     "data_type": null,
+     "description": "The sum of all the order totals (including tax) that a customer has ever placed."
+    },
+    "customer_type": {
+     "name": "customer_type",
+     "data_type": null,
+     "description": "Options are 'new' or 'returning', indicating if a customer has ordered more than once or has only placed their first order to date."
+    }
+   }
+  },
+  "model.jaffle_shop.dim_customer_segment": {
+   "unique_id": "model.jaffle_shop.dim_customer_segment",
+   "resource_type": "model",
+   "name": "dim_customer_segment",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/dim_customer_segment.sql",
+   "description": "Customer dimension with segment classification. One row per customer per segment code (composite grain).",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": true
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_customers",
+     "model.jaffle_shop.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "d786f8954532b2693d4a1027dd5757af114cb53a914c64fcefdfa884e9e3613d"
+   },
+   "raw_code": "with\n\ncustomers as (\n\n    select * from {{ ref('stg_customers') }}\n\n),\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\norder_counts as (\n\n    select\n        customer_id,\n        count(*) as lifetime_order_count\n\n    from orders\n    group by 1\n\n),\n\nsegmented as (\n\n    select\n        customers.customer_id,\n        case\n            when order_counts.lifetime_order_count >= 10 then 'VIP'\n            when order_counts.lifetime_order_count >= 3  then 'REGULAR'\n            else                                              'NEW'\n        end as segment_code,\n        order_counts.lifetime_order_count\n\n    from customers\n    left join order_counts using (customer_id)\n\n)\n\nselect * from segmented",
+   "columns": {
+    "customer_id": {
+     "name": "customer_id",
+     "data_type": "text",
+     "description": "The foreign key to the customer."
+    },
+    "segment_code": {
+     "name": "segment_code",
+     "data_type": "varchar",
+     "description": "The customer segment \u2014 NEW, REGULAR, or VIP."
+    },
+    "lifetime_order_count": {
+     "name": "lifetime_order_count",
+     "data_type": "bigint",
+     "description": "Total number of orders placed by the customer."
+    }
+   }
+  },
+  "model.jaffle_shop.fct_customer_segment_orders": {
+   "unique_id": "model.jaffle_shop.fct_customer_segment_orders",
+   "resource_type": "model",
+   "name": "fct_customer_segment_orders",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/fct_customer_segment_orders.sql",
+   "description": "Fact table joining orders to their customer segment at time of order. One row per order.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": true
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_orders",
+     "model.jaffle_shop.dim_customer_segment",
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "175c9a2a4a11e7a9e79c371000efae14a22fa488b9cdcfe5fe3bf92f1e5ae9d1"
+   },
+   "raw_code": "with\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\nsegments as (\n\n    select * from {{ ref('dim_customer_segment') }}\n\n),\n\njoined as (\n\n    select\n        orders.order_id,\n        orders.customer_id,\n        segments.segment_code,\n        orders.ordered_at,\n        orders.order_total\n\n    from orders\n    inner join segments using (customer_id)\n\n)\n\nselect * from joined",
+   "columns": {
+    "order_id": {
+     "name": "order_id",
+     "data_type": "text",
+     "description": "The unique key for each order."
+    },
+    "customer_id": {
+     "name": "customer_id",
+     "data_type": "text",
+     "description": "Part of the composite FK to dim_customer_segment."
+    },
+    "segment_code": {
+     "name": "segment_code",
+     "data_type": "varchar",
+     "description": "Part of the composite FK to dim_customer_segment."
+    },
+    "ordered_at": {
+     "name": "ordered_at",
+     "data_type": "timestamp_ntz",
+     "description": "The date the order was placed."
+    },
+    "order_total": {
+     "name": "order_total",
+     "data_type": "numeric(16, 2)",
+     "description": "The total order amount in USD including tax."
+    }
+   }
+  },
+  "model.jaffle_shop.locations": {
+   "unique_id": "model.jaffle_shop.locations",
+   "resource_type": "model",
+   "name": "locations",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/locations.sql",
+   "description": "Location overview data mart. One row per location.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": true
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_locations"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "1d3d9ee20be71938907012f387d919a6efd14586ccae6641453266bd5235490d"
+   },
+   "raw_code": "with\n\nlocations as (\n\n    select * from {{ ref('stg_locations') }}\n\n)\n\nselect * from locations",
+   "columns": {
+    "location_id": {
+     "name": "location_id",
+     "data_type": "text",
+     "description": "The unique key of the locations mart."
+    },
+    "location_name": {
+     "name": "location_name",
+     "data_type": "text",
+     "description": "The name of the location."
+    },
+    "tax_rate": {
+     "name": "tax_rate",
+     "data_type": "float",
+     "description": "The tax rate for the location."
+    },
+    "opened_date": {
+     "name": "opened_date",
+     "data_type": "timestamp_ntz",
+     "description": "The date the location opened."
+    }
+   }
+  },
+  "model.jaffle_shop.metricflow_time_spine": {
+   "unique_id": "model.jaffle_shop.metricflow_time_spine",
+   "resource_type": "model",
+   "name": "metricflow_time_spine",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/metricflow_time_spine.sql",
+   "description": "Time spine table for MetricFlow, one row per day.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "716a5a9638a243a5eb9fa472b4020a9c4bde38dbeb753150ee2af45ce0d9bf10"
+   },
+   "raw_code": "-- metricflow_time_spine.sql\nwith\n\ndays as (\n\n    --for BQ adapters use \"DATE('01/01/2000','mm/dd/yyyy')\"\n    {{ dbt_date.get_base_dates(n_dateparts=365*10, datepart=\"day\") }}\n\n),\n\ncast_to_date as (\n\n    select cast(date_day as date) as date_day\n\n    from days\n\n)\n\nselect * from cast_to_date",
+   "columns": {
+    "date_day": {
+     "name": "date_day",
+     "data_type": null,
+     "description": ""
+    }
+   }
+  },
+  "model.jaffle_shop.order_items": {
+   "unique_id": "model.jaffle_shop.order_items",
+   "resource_type": "model",
+   "name": "order_items",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/order_items.sql",
+   "description": "",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_order_items",
+     "model.jaffle_shop.stg_orders",
+     "model.jaffle_shop.stg_products",
+     "model.jaffle_shop.stg_supplies"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "69ee5eb2cd03225dee211923a154fdfaf43c6fe65185203151afc03dbc88932c"
+   },
+   "raw_code": "with\n\norder_items as (\n\n    select * from {{ ref('stg_order_items') }}\n\n),\n\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\nproducts as (\n\n    select * from {{ ref('stg_products') }}\n\n),\n\nsupplies as (\n\n    select * from {{ ref('stg_supplies') }}\n\n),\n\norder_supplies_summary as (\n\n    select\n        product_id,\n\n        sum(supply_cost) as supply_cost\n\n    from supplies\n\n    group by 1\n\n),\n\njoined as (\n\n    select\n        order_items.*,\n\n        orders.ordered_at,\n\n        products.product_name,\n        products.product_price,\n        products.is_food_item,\n        products.is_drink_item,\n\n        order_supplies_summary.supply_cost\n\n    from order_items\n\n    left join orders on order_items.order_id = orders.order_id\n\n    left join products on order_items.product_id = products.product_id\n\n    left join order_supplies_summary\n        on order_items.product_id = order_supplies_summary.product_id\n\n)\n\nselect * from joined",
+   "columns": {
+    "order_item_id": {
+     "name": "order_item_id",
+     "data_type": null,
+     "description": ""
+    },
+    "order_id": {
+     "name": "order_id",
+     "data_type": null,
+     "description": ""
+    }
+   }
+  },
+  "model.jaffle_shop.orders": {
+   "unique_id": "model.jaffle_shop.orders",
+   "resource_type": "model",
+   "name": "orders",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.sql",
+   "description": "Order overview data mart, offering key details for each order inlcluding if it's a customer's first order and a food vs. drink item breakdown. One row per order.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": true
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_orders",
+     "model.jaffle_shop.order_items",
+     "model.jaffle_shop.locations"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "61e17f8b9d80475afa49198ffb4bc2dca193aabf42cb9af3b8d1afcef9ad7b2e"
+   },
+   "raw_code": "with\n\norders as (\n\n    select * from {{ ref('stg_orders') }}\n\n),\n\norder_items as (\n\n    select * from {{ ref('order_items') }}\n\n),\n\norder_items_summary as (\n\n    select\n        order_id,\n\n        sum(supply_cost) as order_cost,\n        sum(product_price) as order_items_subtotal,\n        count(order_item_id) as count_order_items,\n        sum(\n            case\n                when is_food_item then 1\n                else 0\n            end\n        ) as count_food_items,\n        sum(\n            case\n                when is_drink_item then 1\n                else 0\n            end\n        ) as count_drink_items\n\n    from order_items\n\n    group by 1\n\n),\n\ncompute_booleans as (\n\n    select\n        orders.*,\n\n        order_items_summary.order_cost,\n        order_items_summary.order_items_subtotal,\n        order_items_summary.count_food_items,\n        order_items_summary.count_drink_items,\n        order_items_summary.count_order_items,\n        order_items_summary.count_food_items > 0 as is_food_order,\n        order_items_summary.count_drink_items > 0 as is_drink_order\n\n    from orders\n\n    left join\n        order_items_summary\n        on orders.order_id = order_items_summary.order_id\n\n),\n\ncustomer_order_count as (\n\n    select\n        *,\n\n        row_number() over (\n            partition by customer_id\n            order by ordered_at asc\n        ) as customer_order_number\n\n    from compute_booleans\n\n)\n\nselect * from customer_order_count",
+   "columns": {
+    "order_id": {
+     "name": "order_id",
+     "data_type": "text",
+     "description": "The unique key of the orders mart."
+    },
+    "customer_id": {
+     "name": "customer_id",
+     "data_type": "text",
+     "description": "The foreign key relating to the customer who placed the order."
+    },
+    "location_id": {
+     "name": "location_id",
+     "data_type": "text",
+     "description": "The foreign key relating to the location where the order was placed."
+    },
+    "order_total": {
+     "name": "order_total",
+     "data_type": "numeric(16, 2)",
+     "description": "The total amount of the order in USD including tax."
+    },
+    "ordered_at": {
+     "name": "ordered_at",
+     "data_type": "timestamp_ntz",
+     "description": "The timestamp the order was placed at."
+    },
+    "subtotal_cents": {
+     "name": "subtotal_cents",
+     "data_type": "integer",
+     "description": "The pre-tax subtotal of the order in cents."
+    },
+    "tax_paid_cents": {
+     "name": "tax_paid_cents",
+     "data_type": "integer",
+     "description": "The tax portion of the order in cents."
+    },
+    "order_total_cents": {
+     "name": "order_total_cents",
+     "data_type": "integer",
+     "description": "The total amount of the order in cents including tax."
+    },
+    "subtotal": {
+     "name": "subtotal",
+     "data_type": "numeric(16, 2)",
+     "description": "The pre-tax subtotal of the order in USD."
+    },
+    "tax_paid": {
+     "name": "tax_paid",
+     "data_type": "numeric(16, 2)",
+     "description": "The tax portion of the order in USD."
+    },
+    "order_cost": {
+     "name": "order_cost",
+     "data_type": "numeric(16, 2)",
+     "description": "The sum of supply expenses to fulfill the order."
+    },
+    "order_items_subtotal": {
+     "name": "order_items_subtotal",
+     "data_type": "numeric(16, 2)",
+     "description": "The sum of product prices for all items in the order."
+    },
+    "count_order_items": {
+     "name": "count_order_items",
+     "data_type": "bigint",
+     "description": "The number of items in the order."
+    },
+    "count_food_items": {
+     "name": "count_food_items",
+     "data_type": "bigint",
+     "description": "The number of food items in the order."
+    },
+    "count_drink_items": {
+     "name": "count_drink_items",
+     "data_type": "bigint",
+     "description": "The number of drink items in the order."
+    },
+    "is_food_order": {
+     "name": "is_food_order",
+     "data_type": "boolean",
+     "description": "A boolean indicating if this order included any food items."
+    },
+    "is_drink_order": {
+     "name": "is_drink_order",
+     "data_type": "boolean",
+     "description": "A boolean indicating if this order included any drink items."
+    },
+    "customer_order_number": {
+     "name": "customer_order_number",
+     "data_type": "bigint",
+     "description": "The sequential order number for this customer (1 = first order)."
+    }
+   }
+  },
+  "model.jaffle_shop.products": {
+   "unique_id": "model.jaffle_shop.products",
+   "resource_type": "model",
+   "name": "products",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/products.sql",
+   "description": "",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_products"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "f8cce79698b13f8a513398ed0fb931879335c4d9b4fdd423f1067bb86ab68143"
+   },
+   "raw_code": "with\n\nproducts as (\n\n    select * from {{ ref('stg_products') }}\n\n)\n\nselect * from products"
+  },
+  "model.jaffle_shop.stg_customers": {
+   "unique_id": "model.jaffle_shop.stg_customers",
+   "resource_type": "model",
+   "name": "stg_customers",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_customers.sql",
+   "description": "Customer data with basic cleaning and transformation applied, one row per customer.",
+   "config": {
+    "materialized": "view",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "source.jaffle_shop.ecom.raw_customers"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "84a0fec373bce260649e3ad0afa4a69501bca8564494f5561c298f5019288f7b"
+   },
+   "raw_code": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_customers') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as customer_id,\n\n        ---------- text\n        name as customer_name\n\n    from source\n\n)\n\nselect * from renamed",
+   "columns": {
+    "customer_id": {
+     "name": "customer_id",
+     "data_type": null,
+     "description": "The unique key for each customer."
+    }
+   }
+  },
+  "model.jaffle_shop.stg_locations": {
+   "unique_id": "model.jaffle_shop.stg_locations",
+   "resource_type": "model",
+   "name": "stg_locations",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_locations.sql",
+   "description": "List of open locations with basic cleaning and transformation applied, one row per location.",
+   "config": {
+    "materialized": "view",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "source.jaffle_shop.ecom.raw_stores"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "f42df08c1b7dc099e7f25f96a072a996df7da62f07c5f34a621ebbab02958fd3"
+   },
+   "raw_code": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_stores') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as location_id,\n\n        ---------- text\n        name as location_name,\n\n        ---------- numerics\n        tax_rate,\n\n        ---------- timestamps\n        {{ dbt.date_trunc('day', 'opened_at') }} as opened_date\n\n    from source\n\n)\n\nselect * from renamed",
+   "columns": {
+    "location_id": {
+     "name": "location_id",
+     "data_type": null,
+     "description": "The unique key for each location."
+    }
+   }
+  },
+  "model.jaffle_shop.stg_order_items": {
+   "unique_id": "model.jaffle_shop.stg_order_items",
+   "resource_type": "model",
+   "name": "stg_order_items",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_order_items.sql",
+   "description": "Individual food and drink items that make up our orders, one row per item.",
+   "config": {
+    "materialized": "view",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "source.jaffle_shop.ecom.raw_items"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "3cbe0d9fb05ebdc010ddce01ea426a48aa96207e07dd1d3f8cc5fb06f215c797"
+   },
+   "raw_code": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_items') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as order_item_id,\n        order_id,\n        sku as product_id\n\n    from source\n\n)\n\nselect * from renamed",
+   "columns": {
+    "order_item_id": {
+     "name": "order_item_id",
+     "data_type": null,
+     "description": "The unique key for each order item."
+    },
+    "order_id": {
+     "name": "order_id",
+     "data_type": null,
+     "description": "The corresponding order each order item belongs to"
+    }
+   }
+  },
+  "model.jaffle_shop.stg_orders": {
+   "unique_id": "model.jaffle_shop.stg_orders",
+   "resource_type": "model",
+   "name": "stg_orders",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_orders.sql",
+   "description": "Order data with basic cleaning and transformation applied, one row per order.",
+   "config": {
+    "materialized": "view",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "source.jaffle_shop.ecom.raw_orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "2e6ef255075b7033533a247089e6a2b53f0d003387dc1ba0ac3b360a7abe09f2"
+   },
+   "raw_code": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_orders') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        id as order_id,\n        store_id as location_id,\n        customer as customer_id,\n\n        ---------- numerics\n        subtotal as subtotal_cents,\n        tax_paid as tax_paid_cents,\n        order_total as order_total_cents,\n        {{ cents_to_dollars('subtotal') }} as subtotal,\n        {{ cents_to_dollars('tax_paid') }} as tax_paid,\n        {{ cents_to_dollars('order_total') }} as order_total,\n\n        ---------- timestamps\n        {{ dbt.date_trunc('day','ordered_at') }} as ordered_at\n\n    from source\n\n)\n\nselect * from renamed",
+   "columns": {
+    "order_id": {
+     "name": "order_id",
+     "data_type": null,
+     "description": "The unique key for each order."
+    }
+   }
+  },
+  "model.jaffle_shop.stg_products": {
+   "unique_id": "model.jaffle_shop.stg_products",
+   "resource_type": "model",
+   "name": "stg_products",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_products.sql",
+   "description": "Product (food and drink items that can be ordered) data with basic cleaning and transformation applied, one row per product.",
+   "config": {
+    "materialized": "view",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "source.jaffle_shop.ecom.raw_products"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "e5b7c0e2b9f27c6f73adae81f4389ee951f8977ea259297da5046a115ecd05c5"
+   },
+   "raw_code": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_products') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        sku as product_id,\n\n        ---------- text\n        name as product_name,\n        type as product_type,\n        description as product_description,\n\n\n        ---------- numerics\n        {{ cents_to_dollars('price') }} as product_price,\n\n        ---------- booleans\n        coalesce(type = 'jaffle', false) as is_food_item,\n\n        coalesce(type = 'beverage', false) as is_drink_item\n\n    from source\n\n)\n\nselect * from renamed",
+   "columns": {
+    "product_id": {
+     "name": "product_id",
+     "data_type": null,
+     "description": "The unique key for each product."
+    }
+   }
+  },
+  "model.jaffle_shop.stg_supplies": {
+   "unique_id": "model.jaffle_shop.stg_supplies",
+   "resource_type": "model",
+   "name": "stg_supplies",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_supplies.sql",
+   "description": "List of our supply expenses data with basic cleaning and transformation applied.\nOne row per supply cost, not per supply. As supply costs fluctuate they receive a new row with a new UUID. Thus there can be multiple rows per supply_id.\n",
+   "config": {
+    "materialized": "view",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "source.jaffle_shop.ecom.raw_supplies"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "07f6e9f96161d194cee53f04a2ba502f4d00b0bb69445087d5f6d2e760fa596a"
+   },
+   "raw_code": "with\n\nsource as (\n\n    select * from {{ source('ecom', 'raw_supplies') }}\n\n),\n\nrenamed as (\n\n    select\n\n        ----------  ids\n        {{ dbt_utils.generate_surrogate_key(['id', 'sku']) }} as supply_uuid,\n        id as supply_id,\n        sku as product_id,\n\n        ---------- text\n        name as supply_name,\n\n        ---------- numerics\n        {{ cents_to_dollars('cost') }} as supply_cost,\n\n        ---------- booleans\n        perishable as is_perishable_supply\n\n    from source\n\n)\n\nselect * from renamed",
+   "columns": {
+    "supply_uuid": {
+     "name": "supply_uuid",
+     "data_type": null,
+     "description": "The unique key of our supplies per cost."
+    }
+   }
+  },
+  "model.jaffle_shop.supplies": {
+   "unique_id": "model.jaffle_shop.supplies",
+   "resource_type": "model",
+   "name": "supplies",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/supplies.sql",
+   "description": "",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_supplies"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "462bb490d361154f566181cc2bce525b9e1d71ff559618a7b54f9ecffc75c2b9"
+   },
+   "raw_code": "with\n\nsupplies as (\n\n    select * from {{ ref('stg_supplies') }}\n\n)\n\nselect * from supplies"
+  },
+  "seed.jaffle_shop.raw_customers": {
+   "unique_id": "seed.jaffle_shop.raw_customers",
+   "resource_type": "seed",
+   "name": "raw_customers",
+   "package_name": "jaffle_shop",
+   "original_file_path": "seeds/ecom/raw_customers.csv",
+   "description": "",
+   "config": {
+    "materialized": "seed"
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "7be315336e27f09ad0ca4b519e9aa04d78f0a21827069dda5843aedfd76ddac8"
+   },
+   "raw_code": "",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": "text",
+     "description": ""
+    },
+    "name": {
+     "name": "name",
+     "data_type": "text",
+     "description": ""
+    }
+   }
+  },
+  "seed.jaffle_shop.raw_items": {
+   "unique_id": "seed.jaffle_shop.raw_items",
+   "resource_type": "seed",
+   "name": "raw_items",
+   "package_name": "jaffle_shop",
+   "original_file_path": "seeds/ecom/raw_items.csv",
+   "description": "",
+   "config": {
+    "materialized": "seed"
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "a094297ff3ba01427bbcf599f15a597075abdaeab32d2a22f3f8edcd481004ad"
+   },
+   "raw_code": "",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": "text",
+     "description": ""
+    },
+    "order_id": {
+     "name": "order_id",
+     "data_type": "text",
+     "description": ""
+    },
+    "sku": {
+     "name": "sku",
+     "data_type": "text",
+     "description": ""
+    }
+   }
+  },
+  "seed.jaffle_shop.raw_orders": {
+   "unique_id": "seed.jaffle_shop.raw_orders",
+   "resource_type": "seed",
+   "name": "raw_orders",
+   "package_name": "jaffle_shop",
+   "original_file_path": "seeds/ecom/raw_orders.csv",
+   "description": "",
+   "config": {
+    "materialized": "seed"
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "be3d56fb3d56ba00b2a5be0f36ec87bf26393578944351442ec8bbaddc9f0629"
+   },
+   "raw_code": "",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": "text",
+     "description": ""
+    },
+    "customer": {
+     "name": "customer",
+     "data_type": "text",
+     "description": ""
+    },
+    "ordered_at": {
+     "name": "ordered_at",
+     "data_type": "timestamp_ntz",
+     "description": ""
+    },
+    "store_id": {
+     "name": "store_id",
+     "data_type": "text",
+     "description": ""
+    },
+    "subtotal": {
+     "name": "subtotal",
+     "data_type": "number",
+     "description": ""
+    },
+    "tax_paid": {
+     "name": "tax_paid",
+     "data_type": "number",
+     "description": ""
+    },
+    "order_total": {
+     "name": "order_total",
+     "data_type": "number",
+     "description": ""
+    }
+   }
+  },
+  "seed.jaffle_shop.raw_products": {
+   "unique_id": "seed.jaffle_shop.raw_products",
+   "resource_type": "seed",
+   "name": "raw_products",
+   "package_name": "jaffle_shop",
+   "original_file_path": "seeds/ecom/raw_products.csv",
+   "description": "",
+   "config": {
+    "materialized": "seed"
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "265069d96ba3f18973cda83fb85889cbe4bcd191b22c56ae037437e00bb531f1"
+   },
+   "raw_code": "",
+   "columns": {
+    "sku": {
+     "name": "sku",
+     "data_type": "text",
+     "description": ""
+    },
+    "name": {
+     "name": "name",
+     "data_type": "text",
+     "description": ""
+    },
+    "type": {
+     "name": "type",
+     "data_type": "text",
+     "description": ""
+    },
+    "price": {
+     "name": "price",
+     "data_type": "number",
+     "description": ""
+    },
+    "description": {
+     "name": "description",
+     "data_type": "text",
+     "description": ""
+    }
+   }
+  },
+  "seed.jaffle_shop.raw_stores": {
+   "unique_id": "seed.jaffle_shop.raw_stores",
+   "resource_type": "seed",
+   "name": "raw_stores",
+   "package_name": "jaffle_shop",
+   "original_file_path": "seeds/ecom/raw_stores.csv",
+   "description": "",
+   "config": {
+    "materialized": "seed"
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "93800e076b97bc25955e8a8eb100d8560d6e6bffd0d919e295265a8b4eb487df"
+   },
+   "raw_code": "",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": "text",
+     "description": ""
+    },
+    "name": {
+     "name": "name",
+     "data_type": "text",
+     "description": ""
+    },
+    "opened_at": {
+     "name": "opened_at",
+     "data_type": "timestamp_ntz",
+     "description": ""
+    },
+    "tax_rate": {
+     "name": "tax_rate",
+     "data_type": "float",
+     "description": ""
+    }
+   }
+  },
+  "seed.jaffle_shop.raw_supplies": {
+   "unique_id": "seed.jaffle_shop.raw_supplies",
+   "resource_type": "seed",
+   "name": "raw_supplies",
+   "package_name": "jaffle_shop",
+   "original_file_path": "seeds/ecom/raw_supplies.csv",
+   "description": "",
+   "config": {
+    "materialized": "seed"
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "90104533260581fdb7a98e5fceb30bc38a89c8f537b9d38900d10fac9fae9d7e"
+   },
+   "raw_code": "",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": "text",
+     "description": ""
+    },
+    "name": {
+     "name": "name",
+     "data_type": "text",
+     "description": ""
+    },
+    "cost": {
+     "name": "cost",
+     "data_type": "number",
+     "description": ""
+    },
+    "perishable": {
+     "name": "perishable",
+     "data_type": "boolean",
+     "description": ""
+    },
+    "sku": {
+     "name": "sku",
+     "data_type": "text",
+     "description": ""
+    }
+   }
+  },
+  "test.jaffle_shop.accepted_values_customers_customer_type__new__returning.d12f0947c8": {
+   "unique_id": "test.jaffle_shop.accepted_values_customers_customer_type__new__returning.d12f0947c8",
+   "resource_type": "test",
+   "name": "accepted_values_customers_customer_type__new__returning",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/customers.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_accepted_values(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.dbt_utils_expression_is_true_customers_lifetime_spend_pretax_lifetime_tax_paid_lifetime_spend.ad37c989b6": {
+   "unique_id": "test.jaffle_shop.dbt_utils_expression_is_true_customers_lifetime_spend_pretax_lifetime_tax_paid_lifetime_spend.ad37c989b6",
+   "resource_type": "test",
+   "name": "dbt_utils_expression_is_true_customers_lifetime_spend_pretax_lifetime_tax_paid_lifetime_spend",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/customers.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_c_177c20685a18a9071d4a71719e3d9565\") }}"
+  },
+  "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_items_subtotal_subtotal.b1416e07ec": {
+   "unique_id": "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_items_subtotal_subtotal.b1416e07ec",
+   "resource_type": "test",
+   "name": "dbt_utils_expression_is_true_orders_order_items_subtotal_subtotal",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_o_c0acd0b625f5605c61af04356663a823\") }}"
+  },
+  "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_total_subtotal_tax_paid.2aba85df92": {
+   "unique_id": "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_total_subtotal_tax_paid.2aba85df92",
+   "resource_type": "test",
+   "name": "dbt_utils_expression_is_true_orders_order_total_subtotal_tax_paid",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_o_bf2cfee53d5bb32a0a918086ae35fff9\") }}"
+  },
+  "test.jaffle_shop.dbt_utils_expression_is_true_stg_orders_order_total_tax_paid_subtotal.bfb885d7fc": {
+   "unique_id": "test.jaffle_shop.dbt_utils_expression_is_true_stg_orders_order_total_tax_paid_subtotal.bfb885d7fc",
+   "resource_type": "test",
+   "name": "dbt_utils_expression_is_true_stg_orders_order_total_tax_paid_subtotal",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_s_fc9f3efa92425b23fb62ee5a96c17e3f\") }}"
+  },
+  "test.jaffle_shop.not_null_customers_customer_id.5c9bf9911d": {
+   "unique_id": "test.jaffle_shop.not_null_customers_customer_id.5c9bf9911d",
+   "resource_type": "test",
+   "name": "not_null_customers_customer_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/customers.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_locations_location_id.7cc3d904c1": {
+   "unique_id": "test.jaffle_shop.not_null_locations_location_id.7cc3d904c1",
+   "resource_type": "test",
+   "name": "not_null_locations_location_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/locations.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.locations"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_order_items_order_item_id.c6fda366bd": {
+   "unique_id": "test.jaffle_shop.not_null_order_items_order_item_id.c6fda366bd",
+   "resource_type": "test",
+   "name": "not_null_order_items_order_item_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.order_items"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_orders_order_id.cf6c17daed": {
+   "unique_id": "test.jaffle_shop.not_null_orders_order_id.cf6c17daed",
+   "resource_type": "test",
+   "name": "not_null_orders_order_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_customers_customer_id.e2cfb1f9aa": {
+   "unique_id": "test.jaffle_shop.not_null_stg_customers_customer_id.e2cfb1f9aa",
+   "resource_type": "test",
+   "name": "not_null_stg_customers_customer_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_customers.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_locations_location_id.3d237927d2": {
+   "unique_id": "test.jaffle_shop.not_null_stg_locations_location_id.3d237927d2",
+   "resource_type": "test",
+   "name": "not_null_stg_locations_location_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_locations.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_locations"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_order_items_order_id.2063801f96": {
+   "unique_id": "test.jaffle_shop.not_null_stg_order_items_order_id.2063801f96",
+   "resource_type": "test",
+   "name": "not_null_stg_order_items_order_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_order_items"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_order_items_order_item_id.26a7e2bc35": {
+   "unique_id": "test.jaffle_shop.not_null_stg_order_items_order_item_id.26a7e2bc35",
+   "resource_type": "test",
+   "name": "not_null_stg_order_items_order_item_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_order_items"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_orders_order_id.81cfe2fe64": {
+   "unique_id": "test.jaffle_shop.not_null_stg_orders_order_id.81cfe2fe64",
+   "resource_type": "test",
+   "name": "not_null_stg_orders_order_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_products_product_id.6373b0acf3": {
+   "unique_id": "test.jaffle_shop.not_null_stg_products_product_id.6373b0acf3",
+   "resource_type": "test",
+   "name": "not_null_stg_products_product_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_products.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_products"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.not_null_stg_supplies_supply_uuid.515c6eda6d": {
+   "unique_id": "test.jaffle_shop.not_null_stg_supplies_supply_uuid.515c6eda6d",
+   "resource_type": "test",
+   "name": "not_null_stg_supplies_supply_uuid",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_supplies.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_supplies"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.relationships_order_items_order_id__order_id__ref_orders_.a799023ee8": {
+   "unique_id": "test.jaffle_shop.relationships_order_items_order_id__order_id__ref_orders_.a799023ee8",
+   "resource_type": "test",
+   "name": "relationships_order_items_order_id__order_id__ref_orders_",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.order_items",
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_relationships(**_dbt_generic_test_kwargs) }}{{ config(meta={\"relationship_label\":\"order_item_to_order\",\"relationship_type\":\"many-to-one\"}) }}"
+  },
+  "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_stg_customers_.918495ce16": {
+   "unique_id": "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_stg_customers_.918495ce16",
+   "resource_type": "test",
+   "name": "relationships_orders_customer_id__customer_id__ref_stg_customers_",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.orders",
+     "model.jaffle_shop.stg_customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_relationships(**_dbt_generic_test_kwargs) }}{{ config(meta={\"relationship_label\":\"order_to_customer\",\"relationship_type\":\"many-to-one\"}, alias=\"relationships_orders_0389c224a99a98c0b58aedb753f052f0\") }}"
+  },
+  "test.jaffle_shop.relationships_stg_order_items_order_id__order_id__ref_stg_orders_.dbe9930c54": {
+   "unique_id": "test.jaffle_shop.relationships_stg_order_items_order_id__order_id__ref_stg_orders_.dbe9930c54",
+   "resource_type": "test",
+   "name": "relationships_stg_order_items_order_id__order_id__ref_stg_orders_",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_order_items",
+     "model.jaffle_shop.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_relationships(**_dbt_generic_test_kwargs) }}{{ config(meta={\"relationship_label\":\"order_item_to_order\",\"relationship_type\":\"many-to-one\"}, alias=\"relationships_stg_order_items_b3d7cdbd08ebfad01e3226c01c10bba0\") }}"
+  },
+  "test.jaffle_shop.unique_customers_customer_id.c5af1ff4b1": {
+   "unique_id": "test.jaffle_shop.unique_customers_customer_id.c5af1ff4b1",
+   "resource_type": "test",
+   "name": "unique_customers_customer_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/customers.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_locations_location_id.3d912557dd": {
+   "unique_id": "test.jaffle_shop.unique_locations_location_id.3d912557dd",
+   "resource_type": "test",
+   "name": "unique_locations_location_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/locations.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.locations"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_order_items_order_item_id.7d0a7e900a": {
+   "unique_id": "test.jaffle_shop.unique_order_items_order_item_id.7d0a7e900a",
+   "resource_type": "test",
+   "name": "unique_order_items_order_item_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.order_items"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_orders_order_id.fed79b3a6e": {
+   "unique_id": "test.jaffle_shop.unique_orders_order_id.fed79b3a6e",
+   "resource_type": "test",
+   "name": "unique_orders_order_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_stg_customers_customer_id.c7614daada": {
+   "unique_id": "test.jaffle_shop.unique_stg_customers_customer_id.c7614daada",
+   "resource_type": "test",
+   "name": "unique_stg_customers_customer_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_customers.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_customers"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_stg_locations_location_id.2e2fc58ecc": {
+   "unique_id": "test.jaffle_shop.unique_stg_locations_location_id.2e2fc58ecc",
+   "resource_type": "test",
+   "name": "unique_stg_locations_location_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_locations.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_locations"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_stg_order_items_order_item_id.90e333a108": {
+   "unique_id": "test.jaffle_shop.unique_stg_order_items_order_item_id.90e333a108",
+   "resource_type": "test",
+   "name": "unique_stg_order_items_order_item_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_order_items.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_order_items"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_stg_orders_order_id.e3b841c71a": {
+   "unique_id": "test.jaffle_shop.unique_stg_orders_order_id.e3b841c71a",
+   "resource_type": "test",
+   "name": "unique_stg_orders_order_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_orders.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_stg_products_product_id.7d950a1467": {
+   "unique_id": "test.jaffle_shop.unique_stg_products_product_id.7d950a1467",
+   "resource_type": "test",
+   "name": "unique_stg_products_product_id",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_products.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_products"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.jaffle_shop.unique_stg_supplies_supply_uuid.c9e3edcfed": {
+   "unique_id": "test.jaffle_shop.unique_stg_supplies_supply_uuid.c9e3edcfed",
+   "resource_type": "test",
+   "name": "unique_stg_supplies_supply_uuid",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_supplies.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_supplies"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  }
+ },
+ "sources": {
+  "source.jaffle_shop.ecom.raw_customers": {
+   "unique_id": "source.jaffle_shop.ecom.raw_customers",
+   "resource_type": "source",
+   "name": "raw_customers",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/__sources.yml",
+   "description": "One record per person who has purchased one or more items",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "source_name": "ecom",
+   "loaded_at_field": null,
+   "freshness": {
+    "error_after": {
+     "count": null,
+     "period": null
+    },
+    "warn_after": {
+     "count": null,
+     "period": null
+    }
+   }
+  },
+  "source.jaffle_shop.ecom.raw_items": {
+   "unique_id": "source.jaffle_shop.ecom.raw_items",
+   "resource_type": "source",
+   "name": "raw_items",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/__sources.yml",
+   "description": "Items included in an order",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "source_name": "ecom",
+   "loaded_at_field": null,
+   "freshness": {
+    "error_after": {
+     "count": null,
+     "period": null
+    },
+    "warn_after": {
+     "count": null,
+     "period": null
+    }
+   }
+  },
+  "source.jaffle_shop.ecom.raw_orders": {
+   "unique_id": "source.jaffle_shop.ecom.raw_orders",
+   "resource_type": "source",
+   "name": "raw_orders",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/__sources.yml",
+   "description": "One record per order (consisting of one or more order items)",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "source_name": "ecom",
+   "loaded_at_field": "ordered_at",
+   "freshness": {
+    "error_after": {
+     "count": null,
+     "period": null
+    },
+    "warn_after": {
+     "count": null,
+     "period": null
+    }
+   }
+  },
+  "source.jaffle_shop.ecom.raw_products": {
+   "unique_id": "source.jaffle_shop.ecom.raw_products",
+   "resource_type": "source",
+   "name": "raw_products",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/__sources.yml",
+   "description": "One record per SKU for items sold in stores",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "source_name": "ecom",
+   "loaded_at_field": null,
+   "freshness": {
+    "error_after": {
+     "count": null,
+     "period": null
+    },
+    "warn_after": {
+     "count": null,
+     "period": null
+    }
+   }
+  },
+  "source.jaffle_shop.ecom.raw_stores": {
+   "unique_id": "source.jaffle_shop.ecom.raw_stores",
+   "resource_type": "source",
+   "name": "raw_stores",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/__sources.yml",
+   "description": "",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "source_name": "ecom",
+   "loaded_at_field": "opened_at",
+   "freshness": {
+    "error_after": {
+     "count": null,
+     "period": null
+    },
+    "warn_after": {
+     "count": null,
+     "period": null
+    }
+   }
+  },
+  "source.jaffle_shop.ecom.raw_supplies": {
+   "unique_id": "source.jaffle_shop.ecom.raw_supplies",
+   "resource_type": "source",
+   "name": "raw_supplies",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/__sources.yml",
+   "description": "One record per supply per SKU of items sold in stores",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": []
+   },
+   "source_name": "ecom",
+   "loaded_at_field": null,
+   "freshness": {
+    "error_after": {
+     "count": null,
+     "period": null
+    },
+    "warn_after": {
+     "count": null,
+     "period": null
+    }
+   }
+  }
+ },
+ "unit_tests": {
+  "unit_test.jaffle_shop.order_items.test_supply_costs_sum_correctly": {
+   "unique_id": "unit_test.jaffle_shop.order_items.test_supply_costs_sum_correctly",
+   "resource_type": "unit_test",
+   "name": "test_supply_costs_sum_correctly",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/order_items.yml",
+   "description": "Test that the counts of drinks and food orders convert to booleans properly.",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.order_items"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   }
+  },
+  "unit_test.jaffle_shop.orders.test_order_items_compute_to_bools_correctly": {
+   "unique_id": "unit_test.jaffle_shop.orders.test_order_items_compute_to_bools_correctly",
+   "resource_type": "unit_test",
+   "name": "test_order_items_compute_to_bools_correctly",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/marts/orders.yml",
+   "description": "Test that the counts of drinks and food orders convert to booleans properly.",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   }
+  },
+  "unit_test.jaffle_shop.stg_locations.test_does_location_opened_at_trunc_to_date": {
+   "unique_id": "unit_test.jaffle_shop.stg_locations.test_does_location_opened_at_trunc_to_date",
+   "resource_type": "unit_test",
+   "name": "test_does_location_opened_at_trunc_to_date",
+   "package_name": "jaffle_shop",
+   "original_file_path": "models/staging/stg_locations.yml",
+   "description": "Check that opened_at timestamp is properly truncated to a date.",
+   "config": {
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.jaffle_shop.stg_locations"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   }
+  }
+ },
+ "exposures": {},
+ "parent_map": {
+  "model.jaffle_shop.customers": [
+   "model.jaffle_shop.orders",
+   "model.jaffle_shop.stg_customers"
+  ],
+  "model.jaffle_shop.dim_customer_segment": [
+   "model.jaffle_shop.stg_customers",
+   "model.jaffle_shop.stg_orders"
+  ],
+  "model.jaffle_shop.fct_customer_segment_orders": [
+   "model.jaffle_shop.dim_customer_segment",
+   "model.jaffle_shop.orders",
+   "model.jaffle_shop.stg_orders"
+  ],
+  "model.jaffle_shop.locations": [
+   "model.jaffle_shop.stg_locations"
+  ],
+  "model.jaffle_shop.metricflow_time_spine": [],
+  "model.jaffle_shop.order_items": [
+   "model.jaffle_shop.stg_order_items",
+   "model.jaffle_shop.stg_orders",
+   "model.jaffle_shop.stg_products",
+   "model.jaffle_shop.stg_supplies"
+  ],
+  "model.jaffle_shop.orders": [
+   "model.jaffle_shop.locations",
+   "model.jaffle_shop.order_items",
+   "model.jaffle_shop.stg_orders"
+  ],
+  "model.jaffle_shop.products": [
+   "model.jaffle_shop.stg_products"
+  ],
+  "model.jaffle_shop.stg_customers": [
+   "source.jaffle_shop.ecom.raw_customers"
+  ],
+  "model.jaffle_shop.stg_locations": [
+   "source.jaffle_shop.ecom.raw_stores"
+  ],
+  "model.jaffle_shop.stg_order_items": [
+   "source.jaffle_shop.ecom.raw_items"
+  ],
+  "model.jaffle_shop.stg_orders": [
+   "source.jaffle_shop.ecom.raw_orders"
+  ],
+  "model.jaffle_shop.stg_products": [
+   "source.jaffle_shop.ecom.raw_products"
+  ],
+  "model.jaffle_shop.stg_supplies": [
+   "source.jaffle_shop.ecom.raw_supplies"
+  ],
+  "model.jaffle_shop.supplies": [
+   "model.jaffle_shop.stg_supplies"
+  ],
+  "seed.jaffle_shop.raw_customers": [],
+  "seed.jaffle_shop.raw_items": [],
+  "seed.jaffle_shop.raw_orders": [],
+  "seed.jaffle_shop.raw_products": [],
+  "seed.jaffle_shop.raw_stores": [],
+  "seed.jaffle_shop.raw_supplies": [],
+  "source.jaffle_shop.ecom.raw_customers": [],
+  "source.jaffle_shop.ecom.raw_items": [],
+  "source.jaffle_shop.ecom.raw_orders": [],
+  "source.jaffle_shop.ecom.raw_products": [],
+  "source.jaffle_shop.ecom.raw_stores": [],
+  "source.jaffle_shop.ecom.raw_supplies": [],
+  "test.jaffle_shop.accepted_values_customers_customer_type__new__returning.d12f0947c8": [
+   "model.jaffle_shop.customers"
+  ],
+  "test.jaffle_shop.dbt_utils_expression_is_true_customers_lifetime_spend_pretax_lifetime_tax_paid_lifetime_spend.ad37c989b6": [
+   "model.jaffle_shop.customers"
+  ],
+  "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_items_subtotal_subtotal.b1416e07ec": [
+   "model.jaffle_shop.orders"
+  ],
+  "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_total_subtotal_tax_paid.2aba85df92": [
+   "model.jaffle_shop.orders"
+  ],
+  "test.jaffle_shop.dbt_utils_expression_is_true_stg_orders_order_total_tax_paid_subtotal.bfb885d7fc": [
+   "model.jaffle_shop.stg_orders"
+  ],
+  "test.jaffle_shop.not_null_customers_customer_id.5c9bf9911d": [
+   "model.jaffle_shop.customers"
+  ],
+  "test.jaffle_shop.not_null_locations_location_id.7cc3d904c1": [
+   "model.jaffle_shop.locations"
+  ],
+  "test.jaffle_shop.not_null_order_items_order_item_id.c6fda366bd": [
+   "model.jaffle_shop.order_items"
+  ],
+  "test.jaffle_shop.not_null_orders_order_id.cf6c17daed": [
+   "model.jaffle_shop.orders"
+  ],
+  "test.jaffle_shop.not_null_stg_customers_customer_id.e2cfb1f9aa": [
+   "model.jaffle_shop.stg_customers"
+  ],
+  "test.jaffle_shop.not_null_stg_locations_location_id.3d237927d2": [
+   "model.jaffle_shop.stg_locations"
+  ],
+  "test.jaffle_shop.not_null_stg_order_items_order_id.2063801f96": [
+   "model.jaffle_shop.stg_order_items"
+  ],
+  "test.jaffle_shop.not_null_stg_order_items_order_item_id.26a7e2bc35": [
+   "model.jaffle_shop.stg_order_items"
+  ],
+  "test.jaffle_shop.not_null_stg_orders_order_id.81cfe2fe64": [
+   "model.jaffle_shop.stg_orders"
+  ],
+  "test.jaffle_shop.not_null_stg_products_product_id.6373b0acf3": [
+   "model.jaffle_shop.stg_products"
+  ],
+  "test.jaffle_shop.not_null_stg_supplies_supply_uuid.515c6eda6d": [
+   "model.jaffle_shop.stg_supplies"
+  ],
+  "test.jaffle_shop.relationships_order_items_order_id__order_id__ref_orders_.a799023ee8": [
+   "model.jaffle_shop.order_items",
+   "model.jaffle_shop.orders"
+  ],
+  "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_stg_customers_.918495ce16": [
+   "model.jaffle_shop.orders",
+   "model.jaffle_shop.stg_customers"
+  ],
+  "test.jaffle_shop.relationships_stg_order_items_order_id__order_id__ref_stg_orders_.dbe9930c54": [
+   "model.jaffle_shop.stg_order_items",
+   "model.jaffle_shop.stg_orders"
+  ],
+  "test.jaffle_shop.unique_customers_customer_id.c5af1ff4b1": [
+   "model.jaffle_shop.customers"
+  ],
+  "test.jaffle_shop.unique_locations_location_id.3d912557dd": [
+   "model.jaffle_shop.locations"
+  ],
+  "test.jaffle_shop.unique_order_items_order_item_id.7d0a7e900a": [
+   "model.jaffle_shop.order_items"
+  ],
+  "test.jaffle_shop.unique_orders_order_id.fed79b3a6e": [
+   "model.jaffle_shop.orders"
+  ],
+  "test.jaffle_shop.unique_stg_customers_customer_id.c7614daada": [
+   "model.jaffle_shop.stg_customers"
+  ],
+  "test.jaffle_shop.unique_stg_locations_location_id.2e2fc58ecc": [
+   "model.jaffle_shop.stg_locations"
+  ],
+  "test.jaffle_shop.unique_stg_order_items_order_item_id.90e333a108": [
+   "model.jaffle_shop.stg_order_items"
+  ],
+  "test.jaffle_shop.unique_stg_orders_order_id.e3b841c71a": [
+   "model.jaffle_shop.stg_orders"
+  ],
+  "test.jaffle_shop.unique_stg_products_product_id.7d950a1467": [
+   "model.jaffle_shop.stg_products"
+  ],
+  "test.jaffle_shop.unique_stg_supplies_supply_uuid.c9e3edcfed": [
+   "model.jaffle_shop.stg_supplies"
+  ],
+  "unit_test.jaffle_shop.order_items.test_supply_costs_sum_correctly": [
+   "model.jaffle_shop.order_items"
+  ],
+  "unit_test.jaffle_shop.orders.test_order_items_compute_to_bools_correctly": [
+   "model.jaffle_shop.orders"
+  ],
+  "unit_test.jaffle_shop.stg_locations.test_does_location_opened_at_trunc_to_date": [
+   "model.jaffle_shop.stg_locations"
+  ]
+ },
+ "child_map": {
+  "model.jaffle_shop.customers": [
+   "test.jaffle_shop.accepted_values_customers_customer_type__new__returning.d12f0947c8",
+   "test.jaffle_shop.dbt_utils_expression_is_true_customers_lifetime_spend_pretax_lifetime_tax_paid_lifetime_spend.ad37c989b6",
+   "test.jaffle_shop.not_null_customers_customer_id.5c9bf9911d",
+   "test.jaffle_shop.unique_customers_customer_id.c5af1ff4b1"
+  ],
+  "model.jaffle_shop.dim_customer_segment": [
+   "model.jaffle_shop.fct_customer_segment_orders"
+  ],
+  "model.jaffle_shop.fct_customer_segment_orders": [],
+  "model.jaffle_shop.locations": [
+   "model.jaffle_shop.orders",
+   "test.jaffle_shop.not_null_locations_location_id.7cc3d904c1",
+   "test.jaffle_shop.unique_locations_location_id.3d912557dd"
+  ],
+  "model.jaffle_shop.metricflow_time_spine": [],
+  "model.jaffle_shop.order_items": [
+   "model.jaffle_shop.orders",
+   "test.jaffle_shop.not_null_order_items_order_item_id.c6fda366bd",
+   "test.jaffle_shop.relationships_order_items_order_id__order_id__ref_orders_.a799023ee8",
+   "test.jaffle_shop.unique_order_items_order_item_id.7d0a7e900a",
+   "unit_test.jaffle_shop.order_items.test_supply_costs_sum_correctly"
+  ],
+  "model.jaffle_shop.orders": [
+   "model.jaffle_shop.customers",
+   "model.jaffle_shop.fct_customer_segment_orders",
+   "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_items_subtotal_subtotal.b1416e07ec",
+   "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_total_subtotal_tax_paid.2aba85df92",
+   "test.jaffle_shop.not_null_orders_order_id.cf6c17daed",
+   "test.jaffle_shop.relationships_order_items_order_id__order_id__ref_orders_.a799023ee8",
+   "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_stg_customers_.918495ce16",
+   "test.jaffle_shop.unique_orders_order_id.fed79b3a6e",
+   "unit_test.jaffle_shop.orders.test_order_items_compute_to_bools_correctly"
+  ],
+  "model.jaffle_shop.products": [],
+  "model.jaffle_shop.stg_customers": [
+   "model.jaffle_shop.customers",
+   "model.jaffle_shop.dim_customer_segment",
+   "test.jaffle_shop.not_null_stg_customers_customer_id.e2cfb1f9aa",
+   "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_stg_customers_.918495ce16",
+   "test.jaffle_shop.unique_stg_customers_customer_id.c7614daada"
+  ],
+  "model.jaffle_shop.stg_locations": [
+   "model.jaffle_shop.locations",
+   "test.jaffle_shop.not_null_stg_locations_location_id.3d237927d2",
+   "test.jaffle_shop.unique_stg_locations_location_id.2e2fc58ecc",
+   "unit_test.jaffle_shop.stg_locations.test_does_location_opened_at_trunc_to_date"
+  ],
+  "model.jaffle_shop.stg_order_items": [
+   "model.jaffle_shop.order_items",
+   "test.jaffle_shop.not_null_stg_order_items_order_id.2063801f96",
+   "test.jaffle_shop.not_null_stg_order_items_order_item_id.26a7e2bc35",
+   "test.jaffle_shop.relationships_stg_order_items_order_id__order_id__ref_stg_orders_.dbe9930c54",
+   "test.jaffle_shop.unique_stg_order_items_order_item_id.90e333a108"
+  ],
+  "model.jaffle_shop.stg_orders": [
+   "model.jaffle_shop.dim_customer_segment",
+   "model.jaffle_shop.fct_customer_segment_orders",
+   "model.jaffle_shop.order_items",
+   "model.jaffle_shop.orders",
+   "test.jaffle_shop.dbt_utils_expression_is_true_stg_orders_order_total_tax_paid_subtotal.bfb885d7fc",
+   "test.jaffle_shop.not_null_stg_orders_order_id.81cfe2fe64",
+   "test.jaffle_shop.relationships_stg_order_items_order_id__order_id__ref_stg_orders_.dbe9930c54",
+   "test.jaffle_shop.unique_stg_orders_order_id.e3b841c71a"
+  ],
+  "model.jaffle_shop.stg_products": [
+   "model.jaffle_shop.order_items",
+   "model.jaffle_shop.products",
+   "test.jaffle_shop.not_null_stg_products_product_id.6373b0acf3",
+   "test.jaffle_shop.unique_stg_products_product_id.7d950a1467"
+  ],
+  "model.jaffle_shop.stg_supplies": [
+   "model.jaffle_shop.order_items",
+   "model.jaffle_shop.supplies",
+   "test.jaffle_shop.not_null_stg_supplies_supply_uuid.515c6eda6d",
+   "test.jaffle_shop.unique_stg_supplies_supply_uuid.c9e3edcfed"
+  ],
+  "model.jaffle_shop.supplies": [],
+  "seed.jaffle_shop.raw_customers": [],
+  "seed.jaffle_shop.raw_items": [],
+  "seed.jaffle_shop.raw_orders": [],
+  "seed.jaffle_shop.raw_products": [],
+  "seed.jaffle_shop.raw_stores": [],
+  "seed.jaffle_shop.raw_supplies": [],
+  "source.jaffle_shop.ecom.raw_customers": [
+   "model.jaffle_shop.stg_customers"
+  ],
+  "source.jaffle_shop.ecom.raw_items": [
+   "model.jaffle_shop.stg_order_items"
+  ],
+  "source.jaffle_shop.ecom.raw_orders": [
+   "model.jaffle_shop.stg_orders"
+  ],
+  "source.jaffle_shop.ecom.raw_products": [
+   "model.jaffle_shop.stg_products"
+  ],
+  "source.jaffle_shop.ecom.raw_stores": [
+   "model.jaffle_shop.stg_locations"
+  ],
+  "source.jaffle_shop.ecom.raw_supplies": [
+   "model.jaffle_shop.stg_supplies"
+  ],
+  "test.jaffle_shop.accepted_values_customers_customer_type__new__returning.d12f0947c8": [],
+  "test.jaffle_shop.dbt_utils_expression_is_true_customers_lifetime_spend_pretax_lifetime_tax_paid_lifetime_spend.ad37c989b6": [],
+  "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_items_subtotal_subtotal.b1416e07ec": [],
+  "test.jaffle_shop.dbt_utils_expression_is_true_orders_order_total_subtotal_tax_paid.2aba85df92": [],
+  "test.jaffle_shop.dbt_utils_expression_is_true_stg_orders_order_total_tax_paid_subtotal.bfb885d7fc": [],
+  "test.jaffle_shop.not_null_customers_customer_id.5c9bf9911d": [],
+  "test.jaffle_shop.not_null_locations_location_id.7cc3d904c1": [],
+  "test.jaffle_shop.not_null_order_items_order_item_id.c6fda366bd": [],
+  "test.jaffle_shop.not_null_orders_order_id.cf6c17daed": [],
+  "test.jaffle_shop.not_null_stg_customers_customer_id.e2cfb1f9aa": [],
+  "test.jaffle_shop.not_null_stg_locations_location_id.3d237927d2": [],
+  "test.jaffle_shop.not_null_stg_order_items_order_id.2063801f96": [],
+  "test.jaffle_shop.not_null_stg_order_items_order_item_id.26a7e2bc35": [],
+  "test.jaffle_shop.not_null_stg_orders_order_id.81cfe2fe64": [],
+  "test.jaffle_shop.not_null_stg_products_product_id.6373b0acf3": [],
+  "test.jaffle_shop.not_null_stg_supplies_supply_uuid.515c6eda6d": [],
+  "test.jaffle_shop.relationships_order_items_order_id__order_id__ref_orders_.a799023ee8": [],
+  "test.jaffle_shop.relationships_orders_customer_id__customer_id__ref_stg_customers_.918495ce16": [],
+  "test.jaffle_shop.relationships_stg_order_items_order_id__order_id__ref_stg_orders_.dbe9930c54": [],
+  "test.jaffle_shop.unique_customers_customer_id.c5af1ff4b1": [],
+  "test.jaffle_shop.unique_locations_location_id.3d912557dd": [],
+  "test.jaffle_shop.unique_order_items_order_item_id.7d0a7e900a": [],
+  "test.jaffle_shop.unique_orders_order_id.fed79b3a6e": [],
+  "test.jaffle_shop.unique_stg_customers_customer_id.c7614daada": [],
+  "test.jaffle_shop.unique_stg_locations_location_id.2e2fc58ecc": [],
+  "test.jaffle_shop.unique_stg_order_items_order_item_id.90e333a108": [],
+  "test.jaffle_shop.unique_stg_orders_order_id.e3b841c71a": [],
+  "test.jaffle_shop.unique_stg_products_product_id.7d950a1467": [],
+  "test.jaffle_shop.unique_stg_supplies_supply_uuid.c9e3edcfed": [],
+  "unit_test.jaffle_shop.order_items.test_supply_costs_sum_correctly": [],
+  "unit_test.jaffle_shop.orders.test_order_items_compute_to_bools_correctly": [],
+  "unit_test.jaffle_shop.stg_locations.test_does_location_opened_at_trunc_to_date": []
+ }
+}

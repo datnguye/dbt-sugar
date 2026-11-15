@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="sugar-token" content="__SUGAR_TOKEN__">
+<title>dbt sugar</title>
+<link rel="icon" href="/favicon.svg">
+<link rel="stylesheet" href="/style.css">
+<script type="module" src="/app.js"></script>
+</head>
+<body>
+<div class="page">
+<header>
+  <div class="brand">
+    <img src="/favicon.svg" width="32" height="32" alt="" style="image-rendering:pixelated">
+    <div><h1>dbt sugar</h1><button type="button" class="switcher" id="where" data-expand="projects" aria-label="Switch project">connecting…</button></div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <button type="button" role="tab" class="tab" id="tab-live" data-tab="live" aria-selected="true" aria-controls="live-view">Live</button>
+    <button type="button" role="tab" class="tab" id="tab-diff" data-tab="diff" aria-selected="false" aria-controls="diff-view">Diff <span class="tab-count" id="diff-count"></span></button>
+  </nav>
+  <span class="spacer"></span>
+  <span class="chip" id="target" hidden></span>
+  <span class="chip" id="version" hidden></span>
+  <span class="live off" id="live"><i></i><span>offline</span></span>
+  <div class="hint" id="hint" hidden></div>
+</header>
+<main id="live-view" role="tabpanel" aria-labelledby="tab-live">
+  <section class="panel overview area-ov" aria-labelledby="ov">
+    <div class="ov-body">
+      <div class="head"><h2 id="ov">Overview</h2><span class="muted" id="when"></span><span class="spacer"></span><label class="run-pick" id="run-pick" hidden>run <select id="run-select"></select></label></div>
+      <div class="cmdline" id="command-row" hidden><code class="cmd mono" id="command"></code><button type="button" class="btn" data-copy="command" aria-label="Copy the dbt command">Copy</button></div>
+      <div class="phases" id="phases"></div>
+      <div class="progress"><div class="bar" id="bar" role="progressbar" aria-label="Nodes done" aria-valuemin="0"></div><span class="count" id="count">0<span class="muted">/0</span></span><span class="status-word" id="status" aria-live="polite"></span></div>
+      <div class="tally" id="tally"></div>
+    </div>
+    <div class="stage">
+      <div class="track" id="track"><div class="walker" id="walker"></div></div>
+      <div class="mood-line" id="mood" aria-live="polite"></div>
+    </div>
+  </section>
+  <section class="panel area-run" aria-labelledby="rn">
+    <div class="head"><h2 id="rn">Running now</h2><span class="muted" id="running-count"></span><span class="spacer"></span><button type="button" class="btn icon" data-expand="running" aria-label="Expand running now" title="Expand running now"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg></button></div>
+    <div class="fit" tabindex="0" role="region" aria-labelledby="rn"><table><thead><tr id="running-head"></tr></thead><tbody id="running"></tbody></table></div>
+  </section>
+  <section class="panel area-next" aria-labelledby="nx">
+    <div class="head"><h2 id="nx">Up next</h2><span class="muted" id="queued-count"></span><span class="spacer"></span><button type="button" class="btn icon" data-expand="next" aria-label="Expand up next" title="Expand up next"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg></button></div>
+    <div class="fit" tabindex="0" role="region" aria-labelledby="nx"><table><thead><tr id="next-head"></tr></thead><tbody id="next"></tbody></table></div>
+    <div class="risk" id="risk"></div>
+  </section>
+  <section class="panel tips area-tips" aria-labelledby="sg">
+    <div class="head"><h2 id="sg">Suggestions</h2><span class="spacer"></span><button type="button" class="btn primary" id="copy">Copy as prompt</button><button type="button" class="btn icon" data-expand="tips" aria-label="Expand suggestions" title="Expand suggestions"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg></button></div>
+    <div class="fit tip-list" id="tips" tabindex="0" role="region" aria-labelledby="sg"></div>
+  </section>
+  <section class="panel area-log" aria-labelledby="lg">
+    <div class="head"><h2 id="lg">dbt log</h2><span class="muted">logs/dbt.log · UTC</span><span class="spacer"></span>
+      <button type="button" class="btn" data-filter="all" aria-pressed="true">All</button>
+      <button type="button" class="btn" data-filter="warn" aria-pressed="false">Warn</button>
+      <button type="button" class="btn" data-filter="error" aria-pressed="false">Error</button>
+      <button type="button" class="btn icon" data-expand="log" aria-label="Expand dbt log" title="Expand dbt log"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg></button>
+    </div>
+    <div class="log fit" id="log" tabindex="0" role="region" aria-labelledby="lg"></div>
+  </section>
+</main>
+<main id="diff-view" class="diff" role="tabpanel" aria-labelledby="tab-diff" hidden>
+  <section class="panel area-dsum" aria-labelledby="ds">
+    <div class="head"><h2 id="ds">Diff</h2><div class="branches"><label>base <select id="diff-base"></select></label><span class="muted" aria-hidden="true">→</span><label>compare <select id="diff-head"></select></label></div></div>
+    <div class="muted dstatus" id="diff-status"></div>
+    <div class="tally" id="diff-counts"></div>
+    <div class="cmdline" id="diff-cmd-row" hidden><code class="cmd mono" id="diff-cmd"></code><button type="button" class="btn" id="diff-copy" data-copy="diff-cmd" aria-label="Copy the dbt command">Copy</button></div>
+  </section>
+  <section class="panel area-dlist" aria-labelledby="dl">
+    <div class="head"><h2 id="dl">Changes</h2><span class="spacer"></span>
+      <button type="button" class="btn" data-dfilter="all" aria-pressed="true">All</button>
+      <button type="button" class="btn" data-dfilter="models" aria-pressed="false">Models</button>
+      <button type="button" class="btn" data-dfilter="breaking" aria-pressed="false">Breaking</button>
+    </div>
+    <div class="fit change-list" id="diff-list" tabindex="0" role="region" aria-labelledby="dl"></div>
+  </section>
+  <section class="panel area-ddetail" aria-labelledby="dd">
+    <div class="head"><h2 id="dd">Detail</h2><span class="spacer"></span><button type="button" class="btn icon" data-expand="change" aria-label="Expand detail" title="Expand detail"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg></button></div>
+    <div class="fit detail" id="diff-detail" tabindex="0" role="region" aria-labelledby="dd"></div>
+  </section>
+  <section class="panel area-dimpact" aria-labelledby="di">
+    <div class="head"><h2 id="di">Impact</h2><span class="spacer"></span><button type="button" class="btn icon" data-expand="impact" aria-label="Expand impact" title="Expand impact"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="square" aria-hidden="true"><path d="M1.5 5.5v-4h4M10.5 1.5h4v4M14.5 10.5v4h-4M5.5 14.5h-4v-4"/></svg></button></div>
+    <div class="fit detail" id="diff-impact" tabindex="0" role="region" aria-labelledby="di"></div>
+  </section>
+</main>
+<footer><span id="reading">Reading logs/otel*.jsonl · logs/dbt.log · target/manifest.json</span><span id="reading-diff" hidden>Comparing the base manifest with target/manifest.json</span><span class="spacer"></span><span>read-only · nothing leaves your machine</span></footer>
+</div>
+<dialog id="pop" aria-labelledby="pop-title">
+  <div class="head"><h2 id="pop-title"></h2><span class="spacer"></span><span id="pop-tools"></span><button type="button" class="btn icon" id="pop-close" aria-label="Close" title="Close (Esc)"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square" aria-hidden="true"><path d="M3 3l10 10M13 3L3 13"/></svg></button></div>
+  <div class="pop-body" id="pop-body" tabindex="0"></div>
+</dialog>
+</body>
+</html>

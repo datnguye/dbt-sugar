@@ -1,0 +1,271 @@
+{
+ "metadata": {
+  "dbt_version": "2.0.11",
+  "project_name": "sugar_fixture",
+  "invocation_id": "01a1df35-f168-7d20-8bf5-635557836a76",
+  "generated_at": "2026-11-15T12:36:57.438526Z"
+ },
+ "nodes": {
+  "model.sugar_fixture.agg_orders": {
+   "unique_id": "model.sugar_fixture.agg_orders",
+   "resource_type": "model",
+   "name": "agg_orders",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/agg_orders.sql",
+   "description": "Order count and total.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.sugar_fixture.fct_orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "44c7e1d48e88707f91afca8d3909903ea74ec9772e26c9109fdc1411c289e863"
+   },
+   "raw_code": "select count(*) as orders, sum(doubled) as total from {{ ref('fct_orders') }}",
+   "columns": {
+    "total": {
+     "name": "total",
+     "data_type": null,
+     "description": ""
+    }
+   }
+  },
+  "model.sugar_fixture.fct_orders": {
+   "unique_id": "model.sugar_fixture.fct_orders",
+   "resource_type": "model",
+   "name": "fct_orders",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/fct_orders.sql",
+   "description": "Orders with the amount doubled, because sugar.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.sugar_fixture.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "123edd046a4a9105718bff1726086486e1594c976bf05550ec735c7951cdcdbb"
+   },
+   "raw_code": "select id, amount * 2 as doubled from {{ ref('stg_orders') }}",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": null,
+     "description": ""
+    }
+   }
+  },
+  "model.sugar_fixture.stg_orders": {
+   "unique_id": "model.sugar_fixture.stg_orders",
+   "resource_type": "model",
+   "name": "stg_orders",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/stg_orders.sql",
+   "description": "One row per raw order.",
+   "config": {
+    "materialized": "table",
+    "unique_key": null,
+    "incremental_strategy": null,
+    "on_schema_change": null,
+    "contract": {
+     "alias_types": true,
+     "enforced": false
+    },
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "seed.sugar_fixture.raw_orders"
+    ]
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "db79b631cbc4eb0fa7e9a81681b21ed820458b76752b031267fe2025cdf54a76"
+   },
+   "raw_code": "select id, amount from {{ ref('raw_orders') }}",
+   "columns": {
+    "id": {
+     "name": "id",
+     "data_type": null,
+     "description": ""
+    }
+   }
+  },
+  "seed.sugar_fixture.raw_orders": {
+   "unique_id": "seed.sugar_fixture.raw_orders",
+   "resource_type": "seed",
+   "name": "raw_orders",
+   "package_name": "sugar_fixture",
+   "original_file_path": "seeds/raw_orders.csv",
+   "description": "",
+   "config": {},
+   "depends_on": {
+    "nodes": []
+   },
+   "checksum": {
+    "name": "sha256",
+    "checksum": "76b01375b8d9f9619e226d3341b6f6f487c7a71523fb2d5eb7d8143161109f0f"
+   },
+   "raw_code": ""
+  },
+  "test.sugar_fixture.not_null_agg_orders_total.f31e037c67": {
+   "unique_id": "test.sugar_fixture.not_null_agg_orders_total.f31e037c67",
+   "resource_type": "test",
+   "name": "not_null_agg_orders_total",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/schema.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.sugar_fixture.agg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.sugar_fixture.not_null_stg_orders_id.8cf5724805": {
+   "unique_id": "test.sugar_fixture.not_null_stg_orders_id.8cf5724805",
+   "resource_type": "test",
+   "name": "not_null_stg_orders_id",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/schema.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.sugar_fixture.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.sugar_fixture.unique_fct_orders_id.2a20231a0b": {
+   "unique_id": "test.sugar_fixture.unique_fct_orders_id.2a20231a0b",
+   "resource_type": "test",
+   "name": "unique_fct_orders_id",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/schema.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.sugar_fixture.fct_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  },
+  "test.sugar_fixture.unique_stg_orders_id.beb6e97f2f": {
+   "unique_id": "test.sugar_fixture.unique_stg_orders_id.beb6e97f2f",
+   "resource_type": "test",
+   "name": "unique_stg_orders_id",
+   "package_name": "sugar_fixture",
+   "original_file_path": "models/schema.yml",
+   "description": "",
+   "config": {
+    "materialized": "test",
+    "tags": []
+   },
+   "depends_on": {
+    "nodes": [
+     "model.sugar_fixture.stg_orders"
+    ]
+   },
+   "checksum": {
+    "name": "none",
+    "checksum": ""
+   },
+   "raw_code": "{{ test_unique(**_dbt_generic_test_kwargs) }}"
+  }
+ },
+ "sources": {},
+ "unit_tests": {},
+ "exposures": {},
+ "parent_map": {
+  "model.sugar_fixture.agg_orders": [
+   "model.sugar_fixture.fct_orders"
+  ],
+  "model.sugar_fixture.fct_orders": [
+   "model.sugar_fixture.stg_orders"
+  ],
+  "model.sugar_fixture.stg_orders": [
+   "seed.sugar_fixture.raw_orders"
+  ],
+  "seed.sugar_fixture.raw_orders": [],
+  "test.sugar_fixture.not_null_agg_orders_total.f31e037c67": [
+   "model.sugar_fixture.agg_orders"
+  ],
+  "test.sugar_fixture.not_null_stg_orders_id.8cf5724805": [
+   "model.sugar_fixture.stg_orders"
+  ],
+  "test.sugar_fixture.unique_fct_orders_id.2a20231a0b": [
+   "model.sugar_fixture.fct_orders"
+  ],
+  "test.sugar_fixture.unique_stg_orders_id.beb6e97f2f": [
+   "model.sugar_fixture.stg_orders"
+  ]
+ },
+ "child_map": {
+  "model.sugar_fixture.agg_orders": [
+   "test.sugar_fixture.not_null_agg_orders_total.f31e037c67"
+  ],
+  "model.sugar_fixture.fct_orders": [
+   "model.sugar_fixture.agg_orders",
+   "test.sugar_fixture.unique_fct_orders_id.2a20231a0b"
+  ],
+  "model.sugar_fixture.stg_orders": [
+   "model.sugar_fixture.fct_orders",
+   "test.sugar_fixture.not_null_stg_orders_id.8cf5724805",
+   "test.sugar_fixture.unique_stg_orders_id.beb6e97f2f"
+  ],
+  "seed.sugar_fixture.raw_orders": [
+   "model.sugar_fixture.stg_orders"
+  ],
+  "test.sugar_fixture.not_null_agg_orders_total.f31e037c67": [],
+  "test.sugar_fixture.not_null_stg_orders_id.8cf5724805": [],
+  "test.sugar_fixture.unique_fct_orders_id.2a20231a0b": [],
+  "test.sugar_fixture.unique_stg_orders_id.beb6e97f2f": []
+ }
+}

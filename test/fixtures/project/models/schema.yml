@@ -1,0 +1,18 @@
+version: 2
+
+models:
+  - name: stg_orders
+    description: One row per raw order.
+    columns:
+      - name: id
+        data_tests: [unique, not_null]
+  - name: fct_orders
+    description: Orders with the amount doubled, because sugar.
+    columns:
+      - name: id
+        data_tests: [unique]
+  - name: agg_orders
+    description: Order count and total.
+    columns:
+      - name: total
+        data_tests: [not_null]
