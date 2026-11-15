@@ -1,0 +1,489 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dbt sugar Architecture</title>
+<style>
+/* Layout: one stage that plays each flow step by step, its narration beside it, reference tables below. Dark first, like sugar itself. */
+:root {
+  --bg: #0d0d0f;
+  --surface: #151518;
+  --surface-2: #1c1c20;
+  --line: #2a2326;
+  --ink: #ece9ea;
+  --muted: #9d989b;
+  --accent: #e5484d;
+  --accent-soft: rgba(229, 72, 77, 0.16);
+  --amber: #f5b544;
+  --good: #7ee2a8;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #faf8f8; --surface: #ffffff; --surface-2: #f2eeef; --line: #e2dadc; --ink: #1b1719; --muted: #6b6366;
+    --accent: #c9252c; --accent-soft: rgba(201, 37, 44, 0.1); --amber: #b7791f; --good: #1f8a52; color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #faf8f8; --surface: #ffffff; --surface-2: #f2eeef; --line: #e2dadc; --ink: #1b1719; --muted: #6b6366;
+  --accent: #c9252c; --accent-soft: rgba(201, 37, 44, 0.1); --amber: #b7791f; --good: #1f8a52; color-scheme: light;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--sans); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 32px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 28px; }
+header h1 { margin: 0; font-size: 30px; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 70ch; }
+header a { color: var(--accent); }
+.eyebrow { font: 600 11px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.tabs button { font: 600 13px var(--sans); color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; cursor: pointer; }
+.tabs button[aria-selected="true"] { color: #fff; background: var(--accent); border-color: transparent; }
+.tabs button:focus-visible, .controls button:focus-visible, .steps button:focus-visible, select:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+
+.player { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow-x: auto; }
+.stage svg { display: block; width: 100%; min-width: 640px; height: auto; }
+.side { display: grid; gap: 12px; min-width: 0; }
+.caption { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; min-height: 132px; }
+.caption .count { font: 600 11px var(--mono); color: var(--muted); letter-spacing: 0.08em; }
+.caption p { margin: 6px 0 0; }
+.controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.controls button { font: 600 13px var(--sans); color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; height: 34px; min-width: 34px; padding: 0 10px; cursor: pointer; }
+.controls button.primary { background: var(--accent); border-color: transparent; color: #fff; }
+.controls label { margin-left: auto; font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.controls select { background: var(--surface-2); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; height: 30px; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 300px; overflow-y: auto; }
+.steps button { width: 100%; text-align: left; font: 13px/1.35 var(--sans); color: var(--muted); background: transparent; border: 0; border-radius: 8px; padding: 6px 8px; cursor: pointer; display: grid; grid-template-columns: 22px 1fr; gap: 6px; }
+.steps button .n { font: 600 11px var(--mono); padding-top: 2px; }
+.steps button[aria-current="step"] { background: var(--accent-soft); color: var(--ink); }
+.steps button.done { color: var(--ink); }
+
+svg .edge { fill: none; stroke: var(--line); stroke-width: 2; }
+svg .edge.seen { stroke: color-mix(in srgb, var(--accent) 40%, var(--line)); }
+svg .edge.on { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 6 6; animation: march 0.6s linear infinite; }
+@keyframes march { to { stroke-dashoffset: -12; } }
+svg .node rect { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.5; transition: stroke 0.3s, fill 0.3s; }
+svg .node.seen rect { stroke: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+svg .node.hit rect { stroke: var(--accent); fill: var(--accent-soft); }
+svg .node.hit { animation: pop 0.5s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes pop { 40% { transform: scale(1.06); } }
+svg .node .t { fill: var(--ink); font: 600 14px var(--sans); }
+svg .node .s { fill: var(--muted); font: 11px var(--mono); }
+svg .token circle { fill: var(--accent); }
+svg .token rect { fill: var(--bg); stroke: var(--accent); }
+svg .token text { fill: var(--ink); font: 600 11px var(--mono); }
+svg .zone { fill: none; stroke: var(--line); stroke-dasharray: 3 5; }
+svg .zone-label { fill: var(--muted); font: 600 10px var(--mono); letter-spacing: 0.1em; }
+
+section h2 { margin: 0 0 10px; font-size: 20px; }
+section > p { margin: 0 0 12px; color: var(--muted); max-width: 75ch; }
+.ref { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; min-width: 0; }
+.card h3 { margin: 0 0 10px; font-size: 15px; }
+.table { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font: 600 11px var(--mono); letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+code { font: 12.5px var(--mono); color: var(--ink); background: var(--surface-2); border-radius: 4px; padding: 1px 4px; }
+ul.plain { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.layers { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font: 12.5px var(--mono); margin-bottom: 12px; }
+.layers span { background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+.layers i { color: var(--muted); font-style: normal; }
+
+@media (max-width: 900px) { .player { grid-template-columns: minmax(0, 1fr); } .steps { max-height: none; } }
+@media (prefers-reduced-motion: reduce) { svg .edge.on, svg .node.hit { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">docs / architecture</div>
+    <h1>dbt sugar Architecture</h1>
+    <p>How sugar works behind the page, from <code>sugar</code> starting up to a Diff click in the browser. Pick a flow and press play, or step through it. The <a href="spec.md">spec</a> is the contract; this page is the map, and when the two disagree, the spec wins.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Flows" id="tabs"></nav>
+
+  <div class="player">
+    <div class="stage" id="stage" aria-label="Flow diagram"></div>
+    <div class="side">
+      <div class="caption" aria-live="polite"><div class="count" id="count"></div><p id="text"></p></div>
+      <div class="controls">
+        <button type="button" id="prev" aria-label="Previous step">‹</button>
+        <button type="button" id="play" class="primary" aria-label="Pause">Pause</button>
+        <button type="button" id="next" aria-label="Next step">›</button>
+        <label for="speed">Speed <select id="speed"><option value="0.6">0.6×</option><option value="1" selected>1×</option><option value="1.6">1.6×</option></select></label>
+      </div>
+      <ol class="steps" id="steps"></ol>
+    </div>
+  </div>
+
+  <section>
+    <h2>Layers</h2>
+    <p>Dependencies point one way, and <code>npm run check</code> fails the build when they don't. The page imports only its own files.</p>
+    <div class="layers"><span>bin</span><i>→</i><span>cli</span><i>→</i><span>dbt</span><i>·</i><span>core</span><i>·</i><span>server</span><i>·</i><span>history</span><i>→</i><span>core</span><i>·</i><span>web</span></div>
+    <div class="table card"><table>
+      <thead><tr><th>Layer</th><th>Owns</th><th>Never</th></tr></thead>
+      <tbody>
+        <tr><td><code>bin</code>, <code>cli</code></td><td>flags, wiring sources into the builder, spawning dbt, opening the browser</td><td>business logic</td></tr>
+        <tr><td><code>dbt</code></td><td>reading <code>otel*.jsonl</code>, <code>dbt.log</code> and <code>manifest.json</code>; the run archive; git worktrees and <code>dbt parse</code> for the Diff tab</td><td>imports another layer</td></tr>
+        <tr><td><code>core</code></td><td>pure views: run view, mood, suggestions, manifest diff, the snapshot</td><td>touches files, the network or DuckDB</td></tr>
+        <tr><td><code>history</code></td><td>the DuckDB file: past runs, flaky tests, slow models</td><td>imports <code>dbt</code></td></tr>
+        <tr><td><code>server</code></td><td>HTTP routes, SSE, the Host guard and the per-launch token, file watching</td><td>knows what dbt is</td></tr>
+        <tr><td><code>web</code></td><td>rendering, the mascot, hash routes, patching the DOM in place</td><td>imports anything outside <code>web/</code></td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="ref">
+    <div class="card">
+      <h3>Routes the page uses</h3>
+      <div class="table"><table>
+        <thead><tr><th>Route</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET /</code></td><td>the page, with the per-launch token written in</td></tr>
+          <tr><td><code>GET /events</code></td><td>SSE: <code>state</code> on every change, <code>beat</code> every 5 s</td></tr>
+          <tr><td><code>GET /api/state</code></td><td>the current snapshot as JSON</td></tr>
+          <tr><td><code>POST /api/diff</code></td><td>pick the base and compare branches, or run <code>dbt parse</code> for one side (token)</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+    <div class="card">
+      <h3>Where data lives</h3>
+      <ul class="plain">
+        <li><b>Your project</b> (<code>logs/</code>, <code>target/</code>): read, never written. Sugar's own dbt runs log to <code>logs/sugar-&lt;time&gt;-&lt;pid&gt;/</code>.</li>
+        <li><b><code>~/.dbt-sugar</code></b> (or <code>$DBT_SUGAR_HOME</code>): <code>history.duckdb</code>, <code>runs/&lt;project&gt;/</code> with the last 10 invocations, and <code>base/&lt;sha&gt;/</code> with parsed manifests per commit.</li>
+        <li><b>Per invocation</b>: <code>run.json</code>, the matching <code>manifest.json</code> and <code>run_results.json</code>, and its slice of <code>dbt.log</code>.</li>
+        <li><b>Memory only</b>: the live snapshot and the last 10 invocations' log lines (5000 each).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Boundaries</h3>
+      <ul class="plain">
+        <li>The server binds loopback, refuses unknown <code>Host</code> headers and needs the per-launch token on <code>POST</code>.</li>
+        <li>No outbound network. Git refs from the page must match a strict pattern before they reach git.</li>
+        <li>One runtime dependency, <code>@duckdb/node-api</code>, imported only by <code>history/store.js</code>. If it can't load, Live keeps working.</li>
+        <li>Git is only asked to resolve refs and add or remove a detached worktree in a temp folder; dbt is only asked to <code>parse</code>.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+const W = 160;
+const H = 56;
+
+const FLOWS = [
+  {
+    id: 'startup', name: 'Starting sugar',
+    nodes: [
+      { id: 'term', x: 90, y: 270, t: '$ sugar', s: 'your terminal' },
+      { id: 'cli', x: 290, y: 270, t: 'cli/start.js', s: 'parse flags, wire' },
+      { id: 'src', x: 520, y: 80, t: 'dbt sources', s: 'one per -d project' },
+      { id: 'store', x: 520, y: 200, t: 'history store', s: 'DuckDB' },
+      { id: 'home', x: 790, y: 140, t: '~/.dbt-sugar', s: 'history · runs · base' },
+      { id: 'builder', x: 520, y: 330, t: 'snapshot builder', s: 'core' },
+      { id: 'server', x: 520, y: 460, t: 'http server', s: 'loopback + token' },
+      { id: 'watcher', x: 790, y: 330, t: 'file watcher', s: 'fs.watch + 2 s tick' },
+      { id: 'dbt', x: 290, y: 460, t: 'dbt', s: 'only after --' },
+      { id: 'browser', x: 820, y: 460, t: 'browser', s: 'index.html' }
+    ],
+    steps: [
+      { from: 'term', to: 'cli', tag: 'argv', text: 'You run sugar, maybe with a few -d project folders. A bad flag exits with code 2 and --help prints the usage.' },
+      { from: 'cli', to: 'src', tag: 'createDbtSource', text: 'Each project gets a source: where its logs/ and target/ live, honouring DBT_LOG_PATH and DBT_TARGET_PATH.' },
+      { from: 'src', to: 'home', tag: 'runs/', text: 'Archived invocations come back from ~/.dbt-sugar/runs, so the last 10 runs show even after logs/ is cleaned.' },
+      { from: 'cli', to: 'store', tag: 'import', text: 'History opens. DuckDB is imported on demand; if it can\'t load, Live still works.' },
+      { from: 'cli', to: 'builder', tag: 'wire', text: 'The snapshot builder gets every source and the history store.' },
+      { from: 'cli', to: 'server', tag: 'token', text: 'The server binds loopback with a fresh 16-byte token, trying the next port (up to 10) when one is busy.' },
+      { from: 'cli', to: 'watcher', tag: 'watch', text: 'The watcher starts on each project, its logs/ (and per-process subfolders) and target/, plus a 2-second tick.' },
+      { from: 'server', to: 'browser', tag: 'GET /', text: 'The browser opens the page. The token is written into index.html, ready for the Diff tab.' },
+      { from: 'cli', to: 'dbt', tag: 'spawn', text: 'With sugar -- dbt build, sugar starts dbt itself, setting DBT_OTEL_FILE_NAME and a fresh log folder, and exits with dbt\'s code.' }
+    ]
+  },
+  {
+    id: 'live', name: 'Live loop',
+    nodes: [
+      { id: 'dbt', x: 110, y: 120, t: 'dbt', s: 'build · run · test' },
+      { id: 'files', x: 110, y: 400, t: 'logs/ · target/', s: 'otel · dbt.log · manifest' },
+      { id: 'watcher', x: 360, y: 400, t: 'file watcher', s: '150 ms debounce' },
+      { id: 'readers', x: 360, y: 120, t: 'readers', s: 'new bytes only' },
+      { id: 'builder', x: 620, y: 120, t: 'snapshot builder', s: 'runView · suggest' },
+      { id: 'server', x: 620, y: 400, t: 'http server', s: 'compare, broadcast' },
+      { id: 'browser', x: 880, y: 400, t: 'browser', s: 'EventSource' }
+    ],
+    steps: [
+      { from: 'dbt', to: 'files', tag: 'append', text: 'dbt appends OTel spans (invocation, phase, node) to otel.jsonl and human lines to dbt.log.' },
+      { from: 'files', to: 'watcher', tag: 'change', text: 'fs.watch fires (debounced 150 ms), or the 2-second tick comes round.' },
+      { from: 'watcher', to: 'readers', tag: 'read()', text: 'The OTel reader reads only the bytes after its offset and groups records by trace. The log reader splits dbt.log at each ==== time | invocation ==== header.' },
+      { from: 'readers', to: 'builder', tag: 'runs', text: 'Each run becomes a view: phases, counts, running now, up next from the last run\'s order or the manifest DAG, and what an error blocks.' },
+      { from: 'builder', to: 'builder', text: 'Suggestions come from the run, the manifest and history: errors with fixes, grouped warnings, untested models, flaky tests.' },
+      { from: 'builder', to: 'server', tag: 'snapshot', text: 'The new snapshot is compared with the last one, ignoring the clock. If nothing changed, nothing is sent.' },
+      { from: 'server', to: 'browser', tag: 'state', text: 'A changed snapshot goes out as an SSE state event. The page patches only what changed, so Dinor Sugar keeps chasing the logo.' },
+      { from: 'server', to: 'browser', tag: 'beat', bend: 70, text: 'Every 5 seconds a heartbeat tells the page sugar is still there.' }
+    ]
+  },
+  {
+    id: 'archive', name: 'Keeping invocations',
+    zone: { x: 690, y: 40, w: 290, h: 480, label: '~/.dbt-sugar' },
+    nodes: [
+      { id: 'run', x: 110, y: 270, t: 'finished run', s: 'Invocation span ends' },
+      { id: 'source', x: 360, y: 270, t: 'dbt source', s: 'archive.save()' },
+      { id: 'target', x: 360, y: 100, t: 'target/', s: 'same invocation?' },
+      { id: 'log', x: 360, y: 440, t: 'dbt.log', s: 'its slice only' },
+      { id: 'dir', x: 835, y: 160, t: 'runs/<project>/', s: '<time>-<id>/ · last 10' },
+      { id: 'db', x: 835, y: 380, t: 'history.duckdb', s: 'runs · nodes · last 10' }
+    ],
+    steps: [
+      { from: 'run', to: 'source', tag: 'status', text: 'An invocation ends (its OTel span closes) and the source archives it once.' },
+      { from: 'target', to: 'source', tag: 'invocation_id', text: 'manifest.json and run_results.json are copied only when their invocation_id matches, so a later run never overwrites an older one\'s artifacts.' },
+      { from: 'log', to: 'source', tag: 'slice', text: 'Only this invocation\'s part of dbt.log is kept: from its header to the next one.' },
+      { from: 'source', to: 'dir', tag: 'run.json', text: 'Everything lands in its own folder. Beyond 10 invocations per project, the oldest folder goes.' },
+      { from: 'source', to: 'db', tag: 'saveRun', text: 'The run and its nodes go into DuckDB for durations, up-next order and flaky tests; it also keeps 10 per project.' },
+      { from: 'dir', to: 'source', tag: 'load()', bend: -60, text: 'On the next start, archived runs come back with their logs, merged with live ones and without duplicates.' }
+    ]
+  },
+  {
+    id: 'diff', name: 'Diff tab',
+    nodes: [
+      { id: 'you', x: 90, y: 110, t: 'you', s: 'pick branches · Generate' },
+      { id: 'ui', x: 300, y: 110, t: 'app.js', s: 'Diff tab' },
+      { id: 'server', x: 520, y: 110, t: 'http.js', s: 'Host guard · token' },
+      { id: 'source', x: 760, y: 110, t: 'dbt source', s: 'base · compare' },
+      { id: 'git', x: 760, y: 290, t: 'git worktree', s: 'detached, temp folder' },
+      { id: 'parse', x: 520, y: 290, t: 'dbt parse', s: '--target-path cache' },
+      { id: 'cache', x: 300, y: 290, t: 'base/<sha>/', s: 'manifest per commit' },
+      { id: 'core', x: 300, y: 460, t: 'diffManifests', s: 'core/diff.js' },
+      { id: 'page', x: 760, y: 460, t: 'Diff panels', s: 'changes · impact' }
+    ],
+    steps: [
+      { from: 'you', to: 'ui', tag: 'Generate', text: 'Sugar picked the current branch and origin/HEAD (or main) for you. You click Generate because the base has no artifacts yet.' },
+      { from: 'ui', to: 'server', tag: 'POST + token', text: 'POST /api/diff with the per-launch token. Branch names must match a strict ref pattern or it\'s a 400.' },
+      { from: 'server', to: 'source', tag: 'buildDiff', text: 'The source resolves the ref to a commit. One parse per side at a time; a second click joins the first.' },
+      { from: 'source', to: 'git', tag: 'worktree add', text: 'git adds a detached worktree of that commit in a temp folder, with dbt_packages linked in, so your checkout is never touched.' },
+      { from: 'git', to: 'parse', tag: 'parse', text: 'dbt parse runs there with the profiles dir and target of your last run (or DBT_PROFILES_DIR / DBT_TARGET if you set them).' },
+      { from: 'parse', to: 'cache', tag: 'manifest.json', text: 'The manifest lands in ~/.dbt-sugar/base/<sha>/, and the worktree is removed. The same commit is never parsed twice.' },
+      { from: 'cache', to: 'core', tag: 'base', text: 'The base manifest meets the compare side: target/manifest.json, a parse of another branch, or sugar\'s parse of the working tree.' },
+      { from: 'core', to: 'page', tag: 'changes', text: 'Added, modified and removed nodes, breaking changes (contracts, columns, materialization), what sits downstream, a review checklist and a dbt build --select command.' }
+    ]
+  }
+];
+
+const NS = 'http://www.w3.org/2000/svg';
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (id) => document.getElementById(id);
+const state = { flow: 0, step: -1, playing: !reduced, timer: null, raf: null };
+
+function el(name, attrs = {}, parent) {
+  const node = document.createElementNS(NS, name);
+  for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+  if (parent) parent.appendChild(node);
+  return node;
+}
+
+function border(n, tx, ty) {
+  const dx = tx - n.x;
+  const dy = ty - n.y;
+  const k = Math.min(dx ? (W / 2 + 4) / Math.abs(dx) : Infinity, dy ? (H / 2 + 4) / Math.abs(dy) : Infinity);
+  return [n.x + dx * k, n.y + dy * k];
+}
+
+function edgePath(a, b, bend = 0) {
+  const mx = (a.x + b.x) / 2;
+  const my = (a.y + b.y) / 2;
+  const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const cx = mx - ((b.y - a.y) / len) * bend;
+  const cy = my + ((b.x - a.x) / len) * bend;
+  const [sx, sy] = border(a, cx, cy);
+  const [ex, ey] = border(b, cx, cy);
+  return `M${sx.toFixed(1)},${sy.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${ex.toFixed(1)},${ey.toFixed(1)}`;
+}
+
+function edgeKey(step) {
+  return `${step.from}>${step.to}:${step.bend ?? 0}`;
+}
+
+function draw() {
+  const flow = FLOWS[state.flow];
+  const svg = el('svg', { viewBox: '0 0 1000 540', role: 'img', 'aria-label': `${flow.name} diagram` });
+  el('defs', {}, svg).innerHTML = '<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" style="fill: var(--muted)"/></marker>';
+  if (flow.zone) {
+    el('rect', { class: 'zone', x: flow.zone.x, y: flow.zone.y, width: flow.zone.w, height: flow.zone.h, rx: 14 }, svg);
+    el('text', { class: 'zone-label', x: flow.zone.x + 12, y: flow.zone.y - 8 }, svg).textContent = flow.zone.label.toUpperCase();
+  }
+  const byId = Object.fromEntries(flow.nodes.map((n) => [n.id, n]));
+  const edges = el('g', {}, svg);
+  const seen = new Set();
+  for (const step of flow.steps) {
+    if (step.from === step.to || seen.has(edgeKey(step))) continue;
+    seen.add(edgeKey(step));
+    el('path', { class: 'edge', d: edgePath(byId[step.from], byId[step.to], step.bend), 'data-key': edgeKey(step), 'marker-end': 'url(#arrow)' }, edges);
+  }
+  for (const n of flow.nodes) {
+    const g = el('g', { class: 'node', 'data-id': n.id }, svg);
+    el('rect', { x: n.x - W / 2, y: n.y - H / 2, width: W, height: H, rx: 10 }, g);
+    el('text', { class: 't', x: n.x, y: n.y - 3, 'text-anchor': 'middle' }, g).textContent = n.t;
+    el('text', { class: 's', x: n.x, y: n.y + 15, 'text-anchor': 'middle' }, g).textContent = n.s;
+  }
+  el('g', { class: 'token', id: 'token', visibility: 'hidden' }, svg).innerHTML = '<rect rx="9" height="18" y="-26"></rect><text y="-13" text-anchor="middle"></text><circle r="6"></circle>';
+  $('stage').replaceChildren(svg);
+  $('steps').replaceChildren(...flow.steps.map((step, i) => {
+    const li = document.createElement('li');
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.innerHTML = `<span class="n">${String(i + 1).padStart(2, '0')}</span><span></span>`;
+    button.lastChild.textContent = step.text;
+    button.addEventListener('click', () => {
+      setPlaying(false);
+      go(i);
+    });
+    li.appendChild(button);
+    return li;
+  }));
+  document.querySelectorAll('#tabs button').forEach((b, i) => b.setAttribute('aria-selected', String(i === state.flow)));
+}
+
+function speed() {
+  return Number($('speed').value) || 1;
+}
+
+function travel(path, tag, done) {
+  const token = $('token');
+  const total = path.getTotalLength();
+  const label = token.querySelector('text');
+  const box = token.querySelector('rect');
+  label.textContent = tag ?? '';
+  const width = tag ? tag.length * 7 + 16 : 0;
+  box.setAttribute('width', width);
+  box.setAttribute('x', -width / 2);
+  box.setAttribute('visibility', tag ? 'visible' : 'hidden');
+  token.setAttribute('visibility', 'visible');
+  const ms = reduced ? 0 : 1100 / speed();
+  const start = performance.now();
+  cancelAnimationFrame(state.raf);
+  const frame = (now) => {
+    const t = ms ? Math.min(1, (now - start) / ms) : 1;
+    const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
+    const p = path.getPointAtLength(total * eased);
+    token.setAttribute('transform', `translate(${p.x.toFixed(1)},${p.y.toFixed(1)})`);
+    if (t < 1) state.raf = requestAnimationFrame(frame);
+    else done();
+  };
+  state.raf = requestAnimationFrame(frame);
+}
+
+function hit(id) {
+  const node = document.querySelector(`.node[data-id="${id}"]`);
+  node.classList.remove('hit');
+  void node.getBBox();
+  node.classList.add('hit', 'seen');
+}
+
+function go(i) {
+  const flow = FLOWS[state.flow];
+  clearTimeout(state.timer);
+  cancelAnimationFrame(state.raf);
+  state.step = (i + flow.steps.length) % flow.steps.length;
+  const step = flow.steps[state.step];
+  document.querySelectorAll('.node').forEach((n) => n.classList.remove('hit', 'seen'));
+  document.querySelectorAll('.edge').forEach((e) => e.classList.remove('on', 'seen'));
+  flow.steps.slice(0, state.step).forEach((s) => {
+    document.querySelector(`.node[data-id="${s.from}"]`).classList.add('seen');
+    document.querySelector(`.node[data-id="${s.to}"]`).classList.add('seen');
+    document.querySelector(`.edge[data-key="${edgeKey(s)}"]`)?.classList.add('seen');
+  });
+  $('count').textContent = `${flow.name.toUpperCase()} · STEP ${state.step + 1} OF ${flow.steps.length}`;
+  $('text').textContent = step.text;
+  document.querySelectorAll('#steps button').forEach((b, n) => {
+    b.toggleAttribute('aria-current', n === state.step);
+    if (n === state.step) b.setAttribute('aria-current', 'step');
+    b.classList.toggle('done', n < state.step);
+  });
+  const list = $('steps');
+  const current = list.querySelector('[aria-current="step"]');
+  if (current && list.scrollHeight > list.clientHeight) {
+    const top = current.offsetTop - list.offsetTop;
+    if (top < list.scrollTop || top + current.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = top - list.clientHeight / 2 + current.offsetHeight / 2;
+  }
+  hit(step.from);
+  const finish = () => {
+    hit(step.to);
+    if (state.playing) state.timer = setTimeout(() => go(state.step + 1), (state.step === flow.steps.length - 1 ? 3200 : 2200) / speed());
+  };
+  const path = document.querySelector(`.edge[data-key="${edgeKey(step)}"]`);
+  if (!path) {
+    $('token').setAttribute('visibility', 'hidden');
+    return finish();
+  }
+  path.classList.add('on');
+  travel(path, step.tag, finish);
+}
+
+function setPlaying(on) {
+  state.playing = on;
+  $('play').textContent = on ? 'Pause' : 'Play';
+  $('play').setAttribute('aria-label', on ? 'Pause' : 'Play');
+  if (on) go(state.step + 1);
+  else clearTimeout(state.timer);
+}
+
+let resumeWhenVisible = false;
+new IntersectionObserver(([entry]) => {
+  if (!entry.isIntersecting && state.playing) {
+    resumeWhenVisible = true;
+    setPlaying(false);
+  } else if (entry.isIntersecting && resumeWhenVisible) {
+    resumeWhenVisible = false;
+    setPlaying(true);
+  }
+}, { threshold: 0.25 }).observe($('stage'));
+
+function show(index) {
+  state.flow = index;
+  try {
+    history.replaceState(null, '', `#${FLOWS[index].id}`);
+  } catch {}
+  draw();
+  go(0);
+}
+
+$('tabs').replaceChildren(...FLOWS.map((flow, i) => {
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.setAttribute('role', 'tab');
+  b.textContent = flow.name;
+  b.addEventListener('click', () => show(i));
+  return b;
+}));
+$('prev').addEventListener('click', () => {
+  setPlaying(false);
+  go(state.step - 1);
+});
+$('next').addEventListener('click', () => {
+  setPlaying(false);
+  go(state.step + 1);
+});
+$('play').addEventListener('click', () => setPlaying(!state.playing));
+document.addEventListener('keydown', (event) => {
+  if (event.target.closest('select, button')) return;
+  if (event.key === 'ArrowRight') $('next').click();
+  else if (event.key === 'ArrowLeft') $('prev').click();
+  else if (event.key === ' ') {
+    event.preventDefault();
+    $('play').click();
+  }
+});
+if (!state.playing) setPlaying(false);
+function fromHash() {
+  const index = FLOWS.findIndex((f) => `#${f.id}` === location.hash);
+  if (index >= 0 && index !== state.flow) show(index);
+}
+addEventListener('hashchange', fromHash);
+const start = FLOWS.findIndex((f) => `#${f.id}` === location.hash);
+show(start < 0 ? 0 : start);
+</script>
+</body>
+</html>

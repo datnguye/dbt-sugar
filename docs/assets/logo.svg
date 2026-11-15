@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="220" height="88" viewBox="0 0 220 88" role="img" aria-label="dbt sugar" shape-rendering="crispEdges">
+  <rect width="220" height="88" rx="16" fill="#0c0c0c"/>
+  <rect x="1" y="1" width="218" height="86" rx="15" fill="none" stroke="#3a3a3a" stroke-width="2"/>
+  <g transform="translate(14 12) scale(4)">
+    <path fill="#0d3b1f" d="M4 2h7v1H4zM3 3h1v1H3zM11 3h2v1h-2zM2 4h1v8H2zM13 4h1v1h-1zM14 5h1v5h-1zM12 10h2v1h-2zM3 12h1v1H3zM4 13h3v1H4zM9 11h3v1H9zM7 12h2v1H7z"/>
+    <path fill="#4ade80" d="M4 3h7v1H4zM3 4h10v1H3zM3 5h11v5H3zM3 10h9v1H3zM3 11h6v1H3zM4 12h3v1H4z"/>
+    <path fill="#16a34a" d="M1 6h1v2H1zM0 7h1v1H0z"/>
+    <path fill="#0a0a0a" d="M9 5h2v2H9zM11 9h2v1h-2z"/>
+    <path fill="#fff" d="M10 5h1v1h-1z"/>
+    <path fill="#ff7aa8" d="M7 8h2v1H7z"/>
+    <path fill="#ff694b" d="M12 0h1v1h-1zM14 0h1v1h-1zM13 1h1v1h-1zM12 2h1v1h-1zM14 2h1v1h-1z"/>
+  </g>
+  <text x="86" y="44" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="700" fill="#ff5f56">dbt sugar</text>
+  <text x="87" y="64" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="10" fill="#8f8f8f">live runs · branch diffs</text>
+</svg>
