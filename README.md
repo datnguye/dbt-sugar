@@ -60,24 +60,9 @@ Pick the **base** branch (defaults to the repo's default branch, e.g. `origin/ma
 
 It needs whatever `dbt parse` needs (a profile) and reuses your installed `dbt_packages`. The working-tree side is your `target/manifest.json`; if you've never parsed, the page offers Generate for that side too, writing only into sugar's cache (never your `target/` or `logs/`). Nothing has to have run: the Diff tab only needs git and a parse.
 
-## Use it as a library
-
-The page is one consumer. The same pieces are exported for hosts such as [Agent Cage](https://github.com/datnguye/agent-cage) that watch many dbt processes:
-
-```js
-import { createDbtSource, createSnapshotBuilder } from 'dbt-sugar';
-import { mascotSvg } from 'dbt-sugar/mascot';
-
-const source = createDbtSource({ projectDir: '/path/to/project' });
-const builder = createSnapshotBuilder({ sources: [source], store: null });
-const snapshot = await builder.build();
-```
-
-`store` is optional: pass `null` to skip history, the bundled DuckDB store (`createStore`), or anything with `saveRun`, `previousRun` and `stats`. The full behaviour lives in the **[spec](docs/spec.md)**; how the pieces fit together, from `sugar` starting up to a Diff click in the page, is in **[architecture](docs/architecture.html)** (an animated page; open it in a browser).
-
 ## Contributing
 
-Bugs, ideas and new suggestion rules are welcome; see the **[Contributing Guide](CONTRIBUTING.md)** and the **[decision records](docs/decisions/README.md)**. `npm run verify` runs the same gates as CI: syntax and layering checks, unit and e2e tests at 100% coverage, and Playwright against a replay of a real jaffle-shop build (`npm run playground` to watch that replay yourself).
+Bugs, ideas and new suggestion rules are welcome; see the **[Contributing Guide](CONTRIBUTING.md)** and the **[decision records](docs/decisions/README.md)**. The full behaviour lives in the **[spec](docs/spec.md)**; how the pieces fit together, from `sugar` starting up to a Diff click in the page, is in **[architecture](docs/architecture.html)** (an animated page; open it in a browser). `npm run verify` runs the same gates as CI: syntax and layering checks, unit and e2e tests at 100% coverage, and Playwright against a replay of a real jaffle-shop build (`npm run playground` to watch that replay yourself).
 
 ## License
 
